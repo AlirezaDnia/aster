@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { Tab } from "./types";
+import { useState, useEffect } from "react";
+import { Tab, AISettings } from "./types";
 import { TabBar } from "./components/TabBar";
 import { NavigationBar } from "./components/NavigationBar";
+import { AIPanel } from "./components/AIPanel";
 import "./App.css";
 
 export function App() {
@@ -10,6 +11,22 @@ export function App() {
     ]);
     const [activeTabId, setActiveTabId] = useState<string>("1");
     const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+
+    // Local Storage for AI Credentials
+    const [aiSettings, setAiSettings] = useState<AISettings>(() => {
+        const saved = localStorage.getItem("aster_ai_settings");
+        return saved
+            ? JSON.parse(saved)
+            : {
+                  provider: "openrouter",
+                  apiKey: "",
+                  model: "google/gemini-2.5-flash",
+              };
+    });
+
+    useEffect(() => {
+        localStorage.setItem("aster_ai_settings", JSON.stringify(aiSettings));
+    }, [aiSettings]);
 
     const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
@@ -93,16 +110,12 @@ export function App() {
                 </main>
 
                 {isSidebarOpen && (
-                    <aside className="w-80 border-l border-slate-800 bg-slate-950 p-4 flex flex-col justify-between">
-                        <div>
-                            <h3 className="text-sm font-semibold text-indigo-400 flex items-center gap-2">
-                                Aster AI Assistant
-                            </h3>
-                            <p className="text-xs text-slate-500 mt-2">
-                                AI features will be connected in Phase 3.
-                            </p>
-                        </div>
-                    </aside>
+                    <AIPanel
+                        settings={aiSettings}
+                        onSaveSettings={(newSettings) =>
+                            setAiSettings(newSettings)
+                        }
+                    />
                 )}
             </div>
         </div>
