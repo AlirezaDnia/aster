@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { Tab, AISettings } from "./types";
 import { TabBar } from "./components/TabBar";
 import { NavigationBar } from "./components/NavigationBar";
@@ -32,23 +33,21 @@ export function App() {
 
     const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
-    // تابع کمکی برای آپدیت موقعیت و ابعاد Webview نیتیو در Rust
+    // آپدیت ابعاد و وضعیت Webview
     const updateWebviewBounds = (tabId: string, url: string) => {
         if (!viewportRef.current) return;
 
-        // اگر تب آدرس نداشت (New Tab)، Webview قبلی را مخفی/ببند تا StartPage دیده شود
         if (!url) {
-            invoke("close_tab_webview", { label: `tab_${tabId}` }).catch(
+            invoke("hide_tab_webview", { label: `tab_${tabId}` }).catch(
                 () => {},
             );
             return;
         }
 
-        // محاسبه ابعاد دقیق باکس نمایش (با در نظر گرفتن باز/بسته بودن Sidebar)
         setTimeout(() => {
             if (!viewportRef.current) return;
             const rect = viewportRef.current.getBoundingClientRect();
-            invoke("create_tab_webview", {
+            invoke("create_or_show_tab_webview", {
                 label: `tab_${tabId}`,
                 url: url,
                 x: rect.left,
@@ -59,17 +58,67 @@ export function App() {
         }, 50);
     };
 
-    // ریسایز شدن Webview با تغییر سایز پنجره یا باز/بسته شدن Sidebar
+    // لیسنر دریافت رویداد Open in New Tab
+    useEffect(() => {
+        const unlisten = listen<string>("open-new-tab", (event) => {
+            const targetUrl = event.payload;
+            if (!targetUrl) return;
+
+            const newId = Date.now().toString();
+            let title = targetUrl;
+            try {
+                title = new URL(targetUrl).hostname.replace("www.", "");
+            } catch {}
+
+            const newTab: Tab = {
+                id: newId,
+                title: title,
+                url: targetUrl,
+                isLoading: false,
+            };
+
+            setTabs((prev) => [...prev, newTab]);
+        });
+
+        return () => {
+            unlisten.then((fn) => fn());
+        };
+    }, []);
+
     useEffect(() => {
         if (activeTab && activeTab.url) {
             updateWebviewBounds(activeTab.id, activeTab.url);
         }
     }, [isSidebarOpen, activeTabId]);
 
+    // اکشن‌های دکمه‌های پیمایش مرورگر
+    const handleGoBack = () => {
+        if (activeTabId) {
+            invoke("webview_go_back", { label: `tab_${activeTabId}` }).catch(
+                console.error,
+            );
+        }
+    };
+
+    const handleGoForward = () => {
+        if (activeTabId) {
+            invoke("webview_go_forward", { label: `tab_${activeTabId}` }).catch(
+                console.error,
+            );
+        }
+    };
+
+    const handleReload = () => {
+        if (activeTabId) {
+            invoke("webview_reload", { label: `tab_${activeTabId}` }).catch(
+                console.error,
+            );
+        }
+    };
+
     const handleSelectTab = (id: string) => {
-        // بستن/مخفی‌سازی Webview تب قبلی
-        if (activeTab && activeTab.url) {
-            invoke("close_tab_webview", { label: `tab_${activeTab.id}` }).catch(
+        if (activeTabId && activeTabId !== id) {
+            invoke("hide_tab_webview", { label: `tab_${activeTabId}` }).catch(
                 () => {},
             );
         }
@@ -82,9 +131,8 @@ export function App() {
     };
 
     const handleNewTab = () => {
-        // مخفی کردن Webview تب جاری موقع ساخت تب جدید
         if (activeTab && activeTab.url) {
-            invoke("close_tab_webview", { label: `tab_${activeTab.id}` }).catch(
+            invoke("hide_tab_webview", { label: `tab_${activeTab.id}` }).catch(
                 () => {},
             );
         }
@@ -163,6 +211,9 @@ export function App() {
             <NavigationBar
                 currentUrl={activeTab?.url || ""}
                 onNavigate={handleNavigate}
+                onGoBack={handleGoBack}
+                onGoForward={handleGoForward}
+                onReload={handleReload}
                 onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
                 isSidebarOpen={isSidebarOpen}
             />

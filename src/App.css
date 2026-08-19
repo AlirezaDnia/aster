@@ -1,1 +1,18 @@
+/* App.css*/
 @import "tailwindcss";
+
+@layer base {
+    *,
+    *::before,
+    *::after {
+        @apply focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0;
+    }
+}
+
+/* تضمین نهایی برای حذف Focus Ring تمام مرورگرها */
+*:focus,
+*:focus-visible,
+*:active {
+    outline: none !important;
+    box-shadow: none !important;
+}

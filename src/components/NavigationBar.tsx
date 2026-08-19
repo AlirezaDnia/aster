@@ -4,6 +4,9 @@ import { ArrowLeft, ArrowRight, RotateCw, Sparkles, Lock } from "lucide-react";
 interface NavigationBarProps {
     currentUrl: string;
     onNavigate: (url: string) => void;
+    onGoBack: () => void;
+    onGoForward: () => void;
+    onReload: () => void;
     onToggleSidebar: () => void;
     isSidebarOpen: boolean;
 }
@@ -11,6 +14,9 @@ interface NavigationBarProps {
 export function NavigationBar({
     currentUrl,
     onNavigate,
+    onGoBack,
+    onGoForward,
+    onReload,
     onToggleSidebar,
     isSidebarOpen,
 }: NavigationBarProps) {
@@ -29,23 +35,34 @@ export function NavigationBar({
             if (formattedUrl.includes(".") && !formattedUrl.includes(" ")) {
                 formattedUrl = `https://${formattedUrl}`;
             } else {
-                // Use DuckDuckGo HTML version for seamless iframe compatibility
-                formattedUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(formattedUrl)}`;
+                formattedUrl = `https://www.google.com/search?q=${encodeURIComponent(formattedUrl)}`;
             }
         }
         onNavigate(formattedUrl);
     };
 
     return (
-        <div className="flex h-12 w-full items-center gap-2 bg-slate-900 px-3 border-b border-slate-800">
+        <div className="flex h-12 w-full items-center gap-2 bg-slate-900 px-3 border-b border-slate-800 select-none">
             <div className="flex items-center gap-1 text-slate-400">
-                <button className="rounded-lg p-1.5 hover:bg-slate-800 hover:text-slate-200 transition-colors">
+                <button
+                    type="button"
+                    onClick={onGoBack}
+                    className="rounded-lg p-1.5 hover:bg-slate-800 hover:text-slate-200 transition-colors outline-none focus:outline-none focus:ring-0"
+                >
                     <ArrowLeft className="h-4 w-4" />
                 </button>
-                <button className="rounded-lg p-1.5 hover:bg-slate-800 hover:text-slate-200 transition-colors">
+                <button
+                    type="button"
+                    onClick={onGoForward}
+                    className="rounded-lg p-1.5 hover:bg-slate-800 hover:text-slate-200 transition-colors outline-none focus:outline-none focus:ring-0"
+                >
                     <ArrowRight className="h-4 w-4" />
                 </button>
-                <button className="rounded-lg p-1.5 hover:bg-slate-800 hover:text-slate-200 transition-colors">
+                <button
+                    type="button"
+                    onClick={onReload}
+                    className="rounded-lg p-1.5 hover:bg-slate-800 hover:text-slate-200 transition-colors outline-none focus:outline-none focus:ring-0"
+                >
                     <RotateCw className="h-4 w-4" />
                 </button>
             </div>
@@ -58,14 +75,15 @@ export function NavigationBar({
                         value={inputUrl}
                         onChange={(e) => setInputUrl(e.target.value)}
                         placeholder="Search with Google or enter address"
-                        className="w-full bg-transparent text-xs text-slate-200 placeholder-slate-500 focus:outline-none"
+                        className="w-full bg-transparent text-xs text-slate-200 placeholder-slate-500 outline-none focus:outline-none focus:ring-0"
                     />
                 </div>
             </form>
 
             <button
+                type="button"
                 onClick={onToggleSidebar}
-                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all ${
+                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all outline-none focus:outline-none focus:ring-0 ${
                     isSidebarOpen
                         ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
                         : "bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white"

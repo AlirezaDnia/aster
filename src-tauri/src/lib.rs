@@ -1,7 +1,7 @@
 use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, Url, WebviewBuilder, WebviewUrl};
 
 #[tauri::command]
-async fn create_tab_webview(
+async fn create_or_show_tab_webview(
     app: AppHandle,
     label: String,
     url: String,
@@ -10,18 +10,15 @@ async fn create_tab_webview(
     width: f64,
     height: f64,
 ) -> Result<(), String> {
-    let target_url = if url.is_empty() {
-        "about:blank".to_string()
-    } else {
-        url
-    };
-
     let main_window = app.get_window("main").ok_or("Main window not found")?;
 
     if let Some(webview) = app.get_webview(&label) {
-        if !target_url.is_empty() && target_url != "about:blank" {
-            let parsed_url = Url::parse(&target_url).map_err(|e| e.to_string())?;
-            webview.navigate(parsed_url).map_err(|e| e.to_string())?;
+        if !url.is_empty() && url != "about:blank" {
+            let current_url = webview.url().map_err(|e| e.to_string())?;
+            if current_url.as_str() != url {
+                let parsed_url = Url::parse(&url).map_err(|e| e.to_string())?;
+                webview.navigate(parsed_url).map_err(|e| e.to_string())?;
+            }
         }
         webview
             .set_position(LogicalPosition::new(x, y))
@@ -29,19 +26,51 @@ async fn create_tab_webview(
         webview
             .set_size(LogicalSize::new(width, height))
             .map_err(|e| e.to_string())?;
-    } else {
-        let parsed_url = Url::parse(&target_url).map_err(|e| e.to_string())?;
-        let builder = WebviewBuilder::new(&label, WebviewUrl::External(parsed_url));
+        webview.show().map_err(|e| e.to_string())?;
+    } else if !url.is_empty() {
+        let parsed_url = Url::parse(&url).map_err(|e| e.to_string())?;
 
-        main_window
+        let builder = WebviewBuilder::new(&label, WebviewUrl::External(parsed_url)).on_page_load(
+            move |webview, payload| {
+                if payload.event() == tauri::webview::PageLoadEvent::Started {
+                    let _ = webview.eval(
+                        "
+                        window.open = function(url) {
+                            window.__TAURI_INTERNALS__.invoke('plugin:event|emit', {
+                                event: 'open-new-tab',
+                                payload: url
+                            });
+                        };
+                    ",
+                    );
+                }
+            },
+        );
+
+        let webview = main_window
             .add_child(
                 builder,
                 LogicalPosition::new(x, y),
                 LogicalSize::new(width, height),
             )
             .map_err(|e| e.to_string())?;
+
+        webview
+            .set_position(LogicalPosition::new(x, y))
+            .map_err(|e| e.to_string())?;
+        webview
+            .set_size(LogicalSize::new(width, height))
+            .map_err(|e| e.to_string())?;
     }
 
+    Ok(())
+}
+
+#[tauri::command]
+async fn hide_tab_webview(app: AppHandle, label: String) -> Result<(), String> {
+    if let Some(webview) = app.get_webview(&label) {
+        webview.hide().map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
@@ -73,14 +102,43 @@ async fn resize_tab_webview(
     Ok(())
 }
 
+// دستورات جدید پیمایش نیتیو
+#[tauri::command]
+async fn webview_go_back(app: AppHandle, label: String) -> Result<(), String> {
+    if let Some(webview) = app.get_webview(&label) {
+        let _ = webview.eval("window.history.back()");
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn webview_go_forward(app: AppHandle, label: String) -> Result<(), String> {
+    if let Some(webview) = app.get_webview(&label) {
+        let _ = webview.eval("window.history.forward()");
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn webview_reload(app: AppHandle, label: String) -> Result<(), String> {
+    if let Some(webview) = app.get_webview(&label) {
+        let _ = webview.eval("window.location.reload()");
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            create_tab_webview,
+            create_or_show_tab_webview,
+            hide_tab_webview,
             close_tab_webview,
-            resize_tab_webview
+            resize_tab_webview,
+            webview_go_back,
+            webview_go_forward,
+            webview_reload
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
