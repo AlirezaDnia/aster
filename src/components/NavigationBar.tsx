@@ -71,7 +71,7 @@ export function NavigationBar({
                 }`}
             >
                 <Sparkles className="h-3.5 w-3.5" />
-                <span>AI Copilot</span>
+                <span>Aster AI</span>
             </button>
         </div>
     );
