@@ -29,7 +29,8 @@ export function NavigationBar({
             if (formattedUrl.includes(".") && !formattedUrl.includes(" ")) {
                 formattedUrl = `https://${formattedUrl}`;
             } else {
-                formattedUrl = `https://www.google.com/search?q=${encodeURIComponent(formattedUrl)}`;
+                // Use DuckDuckGo HTML version for seamless iframe compatibility
+                formattedUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(formattedUrl)}`;
             }
         }
         onNavigate(formattedUrl);

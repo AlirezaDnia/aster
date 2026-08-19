@@ -3,7 +3,7 @@ import { Tab, AISettings } from "./types";
 import { TabBar } from "./components/TabBar";
 import { NavigationBar } from "./components/NavigationBar";
 import { AIPanel } from "./components/AIPanel";
-import "./App.css";
+import { StartPage } from "./components/StartPage";
 
 export function App() {
     const [tabs, setTabs] = useState<Tab[]>([
@@ -12,7 +12,6 @@ export function App() {
     const [activeTabId, setActiveTabId] = useState<string>("1");
     const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
 
-    // Local Storage for AI Credentials
     const [aiSettings, setAiSettings] = useState<AISettings>(() => {
         const saved = localStorage.getItem("aster_ai_settings");
         return saved
@@ -40,31 +39,43 @@ export function App() {
             url: "",
             isLoading: false,
         };
-        setTabs([...tabs, newTab]);
+        setTabs((prev) => [...prev, newTab]);
         setActiveTabId(newId);
     };
 
     const handleCloseTab = (id: string) => {
         if (tabs.length === 1) return;
-        const filtered = tabs.filter((t) => t.id !== id);
-        setTabs(filtered);
-        if (activeTabId === id) {
-            setActiveTabId(filtered[filtered.length - 1].id);
-        }
+        setTabs((prev) => {
+            const filtered = prev.filter((t) => t.id !== id);
+            if (activeTabId === id) {
+                setActiveTabId(filtered[filtered.length - 1].id);
+            }
+            return filtered;
+        });
     };
 
-    const handleNavigate = (url: string) => {
+    const handleNavigate = (input: string) => {
+        let targetUrl = input.trim();
+
+        if (!/^https?:\/\//i.test(targetUrl)) {
+            if (targetUrl.includes(".") && !targetUrl.includes(" ")) {
+                targetUrl = `https://${targetUrl}`;
+            } else {
+                targetUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(targetUrl)}`;
+            }
+        }
+
         setTabs((prev) =>
             prev.map((tab) => {
                 if (tab.id === activeTabId) {
-                    let title = url;
+                    let title = targetUrl;
                     try {
-                        const parsed = new URL(url);
+                        const parsed = new URL(targetUrl);
                         title = parsed.hostname.replace("www.", "");
                     } catch {
-                        title = url;
+                        title = targetUrl;
                     }
-                    return { ...tab, url, title };
+                    return { ...tab, url: targetUrl, title };
                 }
                 return tab;
             }),
@@ -89,23 +100,16 @@ export function App() {
             />
 
             <div className="flex flex-1 overflow-hidden relative">
-                <main className="flex-1 bg-slate-900 flex items-center justify-center p-6">
+                <main className="flex-1 bg-slate-900 flex items-center justify-center overflow-hidden">
                     {activeTab?.url ? (
                         <iframe
+                            key={activeTab.id + activeTab.url}
                             src={activeTab.url}
-                            className="h-full w-full rounded-lg border border-slate-800 bg-white"
-                            title="Browser View"
+                            className="h-full w-full border-none bg-white"
+                            title="Browser Workspace"
                         />
                     ) : (
-                        <div className="flex flex-col items-center gap-3 text-center">
-                            <h2 className="text-xl font-bold text-slate-300">
-                                Aster Browser
-                            </h2>
-                            <p className="text-xs text-slate-500 max-w-sm">
-                                Enter a URL or search query in the address bar
-                                above to begin browsing.
-                            </p>
-                        </div>
+                        <StartPage onSearch={handleNavigate} />
                     )}
                 </main>
 
