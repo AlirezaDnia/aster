@@ -28,17 +28,23 @@ export function NavigationBar({
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!inputUrl) return;
+        const query = inputUrl.trim();
+        if (!query) return;
 
-        let formattedUrl = inputUrl.trim();
-        if (!/^https?:\/\//i.test(formattedUrl)) {
-            if (formattedUrl.includes(".") && !formattedUrl.includes(" ")) {
-                formattedUrl = `https://${formattedUrl}`;
-            } else {
-                formattedUrl = `https://www.google.com/search?q=${encodeURIComponent(formattedUrl)}`;
-            }
+        let targetUrl = query;
+
+        // بررسی اینکه ورودی URL است یا کلمه برای سرچ
+        const isUrlPattern =
+            /^https?:\/\//i.test(query) ||
+            (query.includes(".") && !query.includes(" "));
+
+        if (!isUrlPattern) {
+            targetUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+        } else if (!/^https?:\/\//i.test(query)) {
+            targetUrl = `https://${query}`;
         }
-        onNavigate(formattedUrl);
+
+        onNavigate(targetUrl);
     };
 
     return (

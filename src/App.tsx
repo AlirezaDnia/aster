@@ -33,7 +33,6 @@ export function App() {
 
     const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
-    // آپدیت ابعاد و وضعیت Webview
     const updateWebviewBounds = (tabId: string, url: string) => {
         if (!viewportRef.current) return;
 
@@ -55,12 +54,43 @@ export function App() {
                 width: rect.width,
                 height: rect.height,
             }).catch(console.error);
-        }, 50);
+        }, 30);
     };
 
-    // لیسنر دریافت رویداد Open in New Tab
+    // دریافت وضعیت لحظه‌ای وب‌ویوها (Title و URL)
     useEffect(() => {
-        const unlisten = listen<string>("open-new-tab", (event) => {
+        const unlisten = listen<{ label: string; url: string; title: string }>(
+            "tab-state-changed",
+            (event) => {
+                const { label, url, title } = event.payload;
+                const tabId = label.replace("tab_", "");
+
+                setTabs((prev) =>
+                    prev.map((tab) => {
+                        if (tab.id === tabId) {
+                            return {
+                                ...tab,
+                                url: url || tab.url,
+                                title:
+                                    title && title.trim() !== ""
+                                        ? title
+                                        : tab.title,
+                            };
+                        }
+                        return tab;
+                    }),
+                );
+            },
+        );
+
+        return () => {
+            unlisten.then((fn) => fn());
+        };
+    }, []);
+
+    // دریافت رویداد باز شدن تب جدید از سمت Rust
+    useEffect(() => {
+        const unlistenNewTab = listen<string>("open-new-tab", (event) => {
             const targetUrl = event.payload;
             if (!targetUrl) return;
 
@@ -78,55 +108,32 @@ export function App() {
             };
 
             setTabs((prev) => [...prev, newTab]);
+            setActiveTabId(newId);
         });
 
         return () => {
-            unlisten.then((fn) => fn());
+            unlistenNewTab.then((fn) => fn());
         };
     }, []);
 
+    // مدیریت تغییر سایز یا تغییر تب فعال
     useEffect(() => {
         if (activeTab && activeTab.url) {
             updateWebviewBounds(activeTab.id, activeTab.url);
         }
     }, [isSidebarOpen, activeTabId]);
 
-    // اکشن‌های دکمه‌های پیمایش مرورگر
-    const handleGoBack = () => {
-        if (activeTabId) {
-            invoke("webview_go_back", { label: `tab_${activeTabId}` }).catch(
-                console.error,
-            );
-        }
-    };
-
-    const handleGoForward = () => {
-        if (activeTabId) {
-            invoke("webview_go_forward", { label: `tab_${activeTabId}` }).catch(
-                console.error,
-            );
-        }
-    };
-
-    const handleReload = () => {
-        if (activeTabId) {
-            invoke("webview_reload", { label: `tab_${activeTabId}` }).catch(
-                console.error,
-            );
-        }
-    };
-
     const handleSelectTab = (id: string) => {
-        if (activeTabId && activeTabId !== id) {
-            invoke("hide_tab_webview", { label: `tab_${activeTabId}` }).catch(
-                () => {},
-            );
-        }
+        if (activeTabId === id) return;
 
         setActiveTabId(id);
         const targetTab = tabs.find((t) => t.id === id);
         if (targetTab && targetTab.url) {
             updateWebviewBounds(id, targetTab.url);
+        } else {
+            invoke("hide_tab_webview", { label: `tab_${activeTabId}` }).catch(
+                () => {},
+            );
         }
     };
 
@@ -182,20 +189,37 @@ export function App() {
         setTabs((prev) =>
             prev.map((tab) => {
                 if (tab.id === activeTabId) {
-                    let title = targetUrl;
-                    try {
-                        const parsed = new URL(targetUrl);
-                        title = parsed.hostname.replace("www.", "");
-                    } catch {
-                        title = targetUrl;
-                    }
-                    return { ...tab, url: targetUrl, title };
+                    return { ...tab, url: targetUrl };
                 }
                 return tab;
             }),
         );
 
         updateWebviewBounds(activeTabId, targetUrl);
+    };
+
+    const handleGoBack = () => {
+        if (activeTabId) {
+            invoke("webview_go_back", { label: `tab_${activeTabId}` }).catch(
+                console.error,
+            );
+        }
+    };
+
+    const handleGoForward = () => {
+        if (activeTabId) {
+            invoke("webview_go_forward", { label: `tab_${activeTabId}` }).catch(
+                console.error,
+            );
+        }
+    };
+
+    const handleReload = () => {
+        if (activeTabId) {
+            invoke("webview_reload", { label: `tab_${activeTabId}` }).catch(
+                console.error,
+            );
+        }
     };
 
     return (
