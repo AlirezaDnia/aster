@@ -57,6 +57,19 @@ async fn create_or_show_tab_webview(
             r#"
             (function() {{
                 const tabLabel = '{}';
+
+                const origOpen = window.open;
+                window.open = function(url, target, features) {{
+                    if (url) {{
+                        window.__TAURI_INTERNALS__.invoke('plugin:event|emit', {{
+                            event: 'open-new-tab',
+                            payload: new URL(url, window.location.href).href
+                        }});
+                        return null;
+                    }}
+                    return origOpen.apply(this, arguments);
+                }};
+
                 function sendState() {{
                     window.__TAURI_INTERNALS__.invoke('plugin:event|emit', {{
                         event: 'tab-state-changed',
@@ -67,20 +80,24 @@ async fn create_or_show_tab_webview(
                         }}
                     }});
                 }}
+
                 const titleObserver = new MutationObserver(() => sendState());
                 if (document.querySelector('title')) {{
                     titleObserver.observe(document.querySelector('title'), {{ childList: true, characterData: true, subtree: true }});
                 }}
+
                 const origPushState = history.pushState;
                 history.pushState = function() {{
                     origPushState.apply(this, arguments);
                     sendState();
                 }};
+
                 const origReplaceState = history.replaceState;
                 history.replaceState = function() {{
                     origReplaceState.apply(this, arguments);
                     sendState();
                 }};
+
                 window.addEventListener('popstate', sendState);
                 window.addEventListener('load', sendState);
                 document.addEventListener('DOMContentLoaded', sendState);
