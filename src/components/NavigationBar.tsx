@@ -6,6 +6,7 @@ import {
     Sparkles,
     SlidersHorizontal,
     MoreVertical,
+    Puzzle,
 } from "lucide-react";
 
 interface NavigationBarProps {
@@ -18,8 +19,10 @@ interface NavigationBarProps {
     onReload: () => void;
     onToggleSidebar: () => void;
     isSidebarOpen: boolean;
-    onToggleMenu: () => void; // 👈 کنترل سایدبار منو از App.tsx
-    isMenuOpen: boolean; // 👈 استیت فعال بودن منو
+    onToggleExtensionsSidebar: () => void; // 👈 کنترل سایدبار اکستنشن‌ها
+    isExtensionsOpen: boolean; // 👈 استیت سایدبار اکستنشن‌ها
+    onToggleMenu: () => void;
+    isMenuOpen: boolean;
 }
 
 export function NavigationBar({
@@ -32,6 +35,8 @@ export function NavigationBar({
     onReload,
     onToggleSidebar,
     isSidebarOpen,
+    onToggleExtensionsSidebar,
+    isExtensionsOpen,
     onToggleMenu,
     isMenuOpen,
 }: NavigationBarProps) {
@@ -135,8 +140,23 @@ export function NavigationBar({
                 </div>
             </form>
 
-            {/* بخش سمت راست: دکمه هوش مصنوعی و دکمه باز کردن سایدبار منو */}
+            {/* بخش سمت راست */}
             <div className="flex items-center gap-1.5">
+                {/* دکمه باز کردن سایدبار افزونه‌ها */}
+                <button
+                    type="button"
+                    onClick={onToggleExtensionsSidebar}
+                    className={`rounded-full p-1.5 transition-colors ${
+                        isExtensionsOpen
+                            ? "bg-indigo-600/20 text-indigo-400 border border-indigo-500/30"
+                            : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                    }`}
+                    title="Built-in Extensions"
+                >
+                    <Puzzle className="h-4 w-4" />
+                </button>
+
+                {/* دکمه هوش مصنوعی */}
                 <button
                     type="button"
                     onClick={onToggleSidebar}
@@ -150,7 +170,7 @@ export function NavigationBar({
                     <span>Aster AI</span>
                 </button>
 
-                {/* دکمه منوی سه‌نقطه که سایدبار را کنترل می‌کند */}
+                {/* دکمه منوی سه‌نقطه */}
                 <button
                     type="button"
                     onClick={onToggleMenu}

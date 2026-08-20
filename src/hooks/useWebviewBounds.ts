@@ -6,6 +6,7 @@ export function useWebviewBounds(
     activeUrl?: string,
     isSidebarOpen?: boolean,
     isMenuOpen?: boolean,
+    isExtensionsOpen?: boolean, // 👈 پارامتر جدید اضافه شد
 ) {
     const viewportRef = useRef<HTMLDivElement>(null);
 
@@ -33,12 +34,12 @@ export function useWebviewBounds(
         }).catch(console.error);
     }, [activeTabId, activeUrl]);
 
-    // اجرای بهینه‌سازی ابعاد هنگام تغییر تب، آدرس، سایدبار هوش مصنوعی یا منو
+    // اجرای بهینه‌سازی ابعاد هنگام تغییر تب، آدرس، سایدبار هوش مصنوعی، منو یا اکستنشن‌ها
     useEffect(() => {
         updateBounds();
-    }, [updateBounds, isSidebarOpen, isMenuOpen]);
+    }, [updateBounds, isSidebarOpen, isMenuOpen, isExtensionsOpen]); // 👈 افزودن isExtensionsOpen به وابستگی‌ها
 
-    // شنیدن تغییرات سایز Element (مثل باز و بسته‌شدن AIPanel یا MenuSidebar)
+    // شنیدن تغییرات سایز Element (مثل باز و بسته‌شدن سایدبارها)
     useEffect(() => {
         if (!viewportRef.current) return;
 

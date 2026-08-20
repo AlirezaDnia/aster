@@ -62,7 +62,48 @@ async fn create_or_show_tab_webview(
         let app_handle = app.clone();
         let app_handle_new = app.clone();
 
+        // اسکریپت اکستنشن‌های داخلی پیش‌فرض (RTL هوشمند و فونت فارسی)
+        let builtin_extensions_script = r#"
+            (function() {
+                function applyBuiltinExtensions() {
+                    const host = window.location.hostname;
+
+                    // اکستنشن ۱: اصلاح جهت متن RTL برای ChatGPT و سیستم‌های هوش مصنوعی
+                    const isAIAssistant = host.includes("chatgpt.com") || host.includes("openai.com") || host.includes("claude.ai");
+                    if (isAIAssistant && !document.getElementById("builtin-ext-rtl")) {
+                        const style = document.createElement("style");
+                        style.id = "builtin-ext-rtl";
+                        style.innerHTML = `
+                            [data-message-author-role], #prompt-textarea, .markdown, article {
+                                direction: auto !important;
+                                text-align: start !important;
+                            }
+                        `;
+                        document.head.appendChild(style);
+                    }
+
+                    // اکستنشن ۲: تزریق فونت فارسی استاندارد (Vazirmatn) برای خوانایی بهتر
+                    if (!document.getElementById("builtin-ext-farsi-font")) {
+                        const fontStyle = document.createElement("style");
+                        fontStyle.id = "builtin-ext-farsi-font";
+                        fontStyle.innerHTML = `
+                            @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
+                            :lang(fa), [lang="fa"] {
+                                font-family: 'Vazirmatn', sans-serif !important;
+                            }
+                        `;
+                        document.head.appendChild(fontStyle);
+                    }
+                }
+
+                window.addEventListener('DOMContentLoaded', applyBuiltinExtensions);
+                const observer = new MutationObserver(applyBuiltinExtensions);
+                observer.observe(document, { childList: true, subtree: true });
+            })();
+        "#;
+
         let builder = WebviewBuilder::new(&label, WebviewUrl::External(parsed_url))
+            .initialization_script(builtin_extensions_script)
             .on_page_load(move |webview, payload| {
                 let app = app_handle.clone();
                 let label = webview.label().to_string();
@@ -184,6 +225,15 @@ async fn set_webview_zoom(app: AppHandle, label: String, factor: f64) -> Result<
     Ok(())
 }
 
+// دستور جدید برای اجرای اسکریپت اکستنشن‌های دستی از سمت UI (React)
+#[tauri::command]
+async fn eval_webview_script(app: AppHandle, label: String, script: String) -> Result<(), String> {
+    if let Some(webview) = app.get_webview(&label) {
+        let _ = webview.eval(&script);
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -196,6 +246,7 @@ pub fn run() {
             webview_go_forward,
             webview_reload,
             set_webview_zoom,
+            eval_webview_script,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
