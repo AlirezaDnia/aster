@@ -1,7 +1,15 @@
+use serde::Serialize;
 use tauri::{
     webview::NewWindowResponse, AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Url,
     WebviewBuilder, WebviewUrl,
 };
+
+#[derive(Clone, Serialize)]
+struct TabStatePayload<'a> {
+    label: &'a str,
+    url: &'a str,
+    title: &'a str,
+}
 
 #[tauri::command]
 async fn create_or_show_tab_webview(
@@ -15,20 +23,19 @@ async fn create_or_show_tab_webview(
 ) -> Result<(), String> {
     let main_window = app.get_window("main").ok_or("Main window not found")?;
 
-    // مخفی کردن تمام وب‌ویوهای فعلی
+    // مخفی‌سازی بقیه تب‌ها برای بهینه‌سازی GPU
     for (name, webview) in app.webviews() {
-        if name.starts_with("tab_") {
+        if name.starts_with("tab_") && name != label {
             let _ = webview.hide();
         }
     }
 
+    let pos = LogicalPosition::new(x, y);
+    let size = LogicalSize::new(width, height);
+
     if let Some(webview) = app.get_webview(&label) {
-        webview
-            .set_position(LogicalPosition::new(x, y))
-            .map_err(|e| e.to_string())?;
-        webview
-            .set_size(LogicalSize::new(width, height))
-            .map_err(|e| e.to_string())?;
+        webview.set_position(pos).map_err(|e| e.to_string())?;
+        webview.set_size(size).map_err(|e| e.to_string())?;
 
         if !url.is_empty() && url != "about:blank" {
             if let Ok(current_url) = webview.url() {
@@ -42,7 +49,6 @@ async fn create_or_show_tab_webview(
         webview.show().map_err(|e| e.to_string())?;
     } else if !url.is_empty() {
         let parsed_url = Url::parse(&url).map_err(|e| e.to_string())?;
-
         let app_handle_nav = app.clone();
         let app_handle_new_window = app.clone();
         let tab_label = label.clone();
@@ -51,7 +57,6 @@ async fn create_or_show_tab_webview(
             r#"
             (function() {{
                 const tabLabel = '{}';
-                
                 function sendState() {{
                     window.__TAURI_INTERNALS__.invoke('plugin:event|emit', {{
                         event: 'tab-state-changed',
@@ -62,24 +67,20 @@ async fn create_or_show_tab_webview(
                         }}
                     }});
                 }}
-
                 const titleObserver = new MutationObserver(() => sendState());
                 if (document.querySelector('title')) {{
                     titleObserver.observe(document.querySelector('title'), {{ childList: true, characterData: true, subtree: true }});
                 }}
-
                 const origPushState = history.pushState;
                 history.pushState = function() {{
                     origPushState.apply(this, arguments);
                     sendState();
                 }};
-
                 const origReplaceState = history.replaceState;
                 history.replaceState = function() {{
                     origReplaceState.apply(this, arguments);
                     sendState();
                 }};
-
                 window.addEventListener('popstate', sendState);
                 window.addEventListener('load', sendState);
                 document.addEventListener('DOMContentLoaded', sendState);
@@ -93,34 +94,23 @@ async fn create_or_show_tab_webview(
             .on_navigation(move |nav_url| {
                 let _ = app_handle_nav.emit(
                     "tab-state-changed",
-                    serde_json::json!({
-                        "label": tab_label,
-                        "url": nav_url.as_str(),
-                        "title": nav_url.host_str().unwrap_or("Loading...")
-                    }),
+                    TabStatePayload {
+                        label: &tab_label,
+                        url: nav_url.as_str(),
+                        title: nav_url.host_str().unwrap_or("Loading..."),
+                    },
                 );
                 true
             })
-            // استفاده از NewWindowResponse::Deny برای تایپ دقیق Tauri v2
-            .on_new_window(move |url, _features| {
+            .on_new_window(move |url, _| {
                 let _ = app_handle_new_window.emit("open-new-tab", url.as_str());
                 NewWindowResponse::Deny
             });
 
         let webview = main_window
-            .add_child(
-                builder,
-                LogicalPosition::new(x, y),
-                LogicalSize::new(width, height),
-            )
+            .add_child(builder, pos, size)
             .map_err(|e| e.to_string())?;
 
-        webview
-            .set_position(LogicalPosition::new(x, y))
-            .map_err(|e| e.to_string())?;
-        webview
-            .set_size(LogicalSize::new(width, height))
-            .map_err(|e| e.to_string())?;
         webview.show().map_err(|e| e.to_string())?;
     }
 

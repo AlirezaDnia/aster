@@ -1,20 +1,28 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Tab, AISettings } from "./types";
+import { AISettings } from "./types";
 import { TabBar } from "./components/TabBar";
 import { NavigationBar } from "./components/NavigationBar";
 import { AIPanel } from "./components/AIPanel";
 import { StartPage } from "./components/StartPage";
+import { useTabManager } from "./hooks/useTabManager";
+import { useWebviewBounds } from "./hooks/useWebviewBounds";
 
 export function App() {
-    const [tabs, setTabs] = useState<Tab[]>([
-        { id: "1", title: "New Tab", url: "", isLoading: false },
-    ]);
-    const [activeTabId, setActiveTabId] = useState<string>("1");
-    const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+    const {
+        tabs,
+        setTabs,
+        activeTabId,
+        activeTab,
+        handleSelectTab,
+        handleNewTab,
+        handleCloseTab,
+        handleNavigate,
+    } = useTabManager();
 
-    const viewportRef = useRef<HTMLDivElement>(null);
+    const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+    const { viewportRef } = useWebviewBounds(activeTabId, activeTab?.url);
 
     const [aiSettings, setAiSettings] = useState<AISettings>(() => {
         const saved = localStorage.getItem("aster_ai_settings");
@@ -31,196 +39,50 @@ export function App() {
         localStorage.setItem("aster_ai_settings", JSON.stringify(aiSettings));
     }, [aiSettings]);
 
-    const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
+    // شنیدن تغییرات State وب‌ویو
+    useEffect(() => {
+        const unlistenPromise = listen<{
+            label: string;
+            url: string;
+            title: string;
+        }>("tab-state-changed", (event) => {
+            const { label, url, title } = event.payload;
+            const tabId = label.replace("tab_", "");
 
-    const updateWebviewBounds = (tabId: string, url: string) => {
-        if (!viewportRef.current) return;
-
-        if (!url) {
-            invoke("hide_tab_webview", { label: `tab_${tabId}` }).catch(
-                () => {},
+            setTabs((prev) =>
+                prev.map((tab) => {
+                    if (tab.id === tabId) {
+                        return {
+                            ...tab,
+                            url: url || tab.url,
+                            title:
+                                title && title.trim() !== ""
+                                    ? title
+                                    : tab.title,
+                        };
+                    }
+                    return tab;
+                }),
             );
-            return;
-        }
-
-        setTimeout(() => {
-            if (!viewportRef.current) return;
-            const rect = viewportRef.current.getBoundingClientRect();
-            invoke("create_or_show_tab_webview", {
-                label: `tab_${tabId}`,
-                url: url,
-                x: rect.left,
-                y: rect.top,
-                width: rect.width,
-                height: rect.height,
-            }).catch(console.error);
-        }, 30);
-    };
-
-    // دریافت وضعیت لحظه‌ای وب‌ویوها (Title و URL)
-    useEffect(() => {
-        const unlisten = listen<{ label: string; url: string; title: string }>(
-            "tab-state-changed",
-            (event) => {
-                const { label, url, title } = event.payload;
-                const tabId = label.replace("tab_", "");
-
-                setTabs((prev) =>
-                    prev.map((tab) => {
-                        if (tab.id === tabId) {
-                            return {
-                                ...tab,
-                                url: url || tab.url,
-                                title:
-                                    title && title.trim() !== ""
-                                        ? title
-                                        : tab.title,
-                            };
-                        }
-                        return tab;
-                    }),
-                );
-            },
-        );
-
-        return () => {
-            unlisten.then((fn) => fn());
-        };
-    }, []);
-
-    // دریافت رویداد باز شدن تب جدید از سمت Rust
-    useEffect(() => {
-        const unlistenNewTab = listen<string>("open-new-tab", (event) => {
-            const targetUrl = event.payload;
-            if (!targetUrl) return;
-
-            const newId = Date.now().toString();
-            let title = targetUrl;
-            try {
-                title = new URL(targetUrl).hostname.replace("www.", "");
-            } catch {}
-
-            const newTab: Tab = {
-                id: newId,
-                title: title,
-                url: targetUrl,
-                isLoading: false,
-            };
-
-            setTabs((prev) => [...prev, newTab]);
-            setActiveTabId(newId);
         });
 
         return () => {
-            unlistenNewTab.then((fn) => fn());
+            unlistenPromise.then((fn) => fn());
         };
-    }, []);
+    }, [setTabs]);
 
-    // مدیریت تغییر سایز یا تغییر تب فعال
+    // شنیدن رویداد باز شدن تب جدید از سمت Rust
     useEffect(() => {
-        if (activeTab && activeTab.url) {
-            updateWebviewBounds(activeTab.id, activeTab.url);
-        }
-    }, [isSidebarOpen, activeTabId]);
-
-    const handleSelectTab = (id: string) => {
-        if (activeTabId === id) return;
-
-        setActiveTabId(id);
-        const targetTab = tabs.find((t) => t.id === id);
-        if (targetTab && targetTab.url) {
-            updateWebviewBounds(id, targetTab.url);
-        } else {
-            invoke("hide_tab_webview", { label: `tab_${activeTabId}` }).catch(
-                () => {},
-            );
-        }
-    };
-
-    const handleNewTab = () => {
-        if (activeTab && activeTab.url) {
-            invoke("hide_tab_webview", { label: `tab_${activeTab.id}` }).catch(
-                () => {},
-            );
-        }
-
-        const newId = Date.now().toString();
-        const newTab: Tab = {
-            id: newId,
-            title: "New Tab",
-            url: "",
-            isLoading: false,
-        };
-        setTabs((prev) => [...prev, newTab]);
-        setActiveTabId(newId);
-    };
-
-    const handleCloseTab = (id: string) => {
-        if (tabs.length === 1) return;
-
-        invoke("close_tab_webview", { label: `tab_${id}` }).catch(
-            console.error,
-        );
-
-        setTabs((prev) => {
-            const filtered = prev.filter((t) => t.id !== id);
-            if (activeTabId === id) {
-                const nextActive = filtered[filtered.length - 1];
-                setActiveTabId(nextActive.id);
-                if (nextActive.url) {
-                    updateWebviewBounds(nextActive.id, nextActive.url);
-                }
+        const unlistenPromise = listen<string>("open-new-tab", (event) => {
+            if (event.payload) {
+                handleNewTab(event.payload);
             }
-            return filtered;
         });
-    };
 
-    const handleNavigate = (input: string) => {
-        let targetUrl = input.trim();
-
-        if (!/^https?:\/\//i.test(targetUrl)) {
-            if (targetUrl.includes(".") && !targetUrl.includes(" ")) {
-                targetUrl = `https://${targetUrl}`;
-            } else {
-                targetUrl = `https://www.google.com/search?q=${encodeURIComponent(targetUrl)}`;
-            }
-        }
-
-        setTabs((prev) =>
-            prev.map((tab) => {
-                if (tab.id === activeTabId) {
-                    return { ...tab, url: targetUrl };
-                }
-                return tab;
-            }),
-        );
-
-        updateWebviewBounds(activeTabId, targetUrl);
-    };
-
-    const handleGoBack = () => {
-        if (activeTabId) {
-            invoke("webview_go_back", { label: `tab_${activeTabId}` }).catch(
-                console.error,
-            );
-        }
-    };
-
-    const handleGoForward = () => {
-        if (activeTabId) {
-            invoke("webview_go_forward", { label: `tab_${activeTabId}` }).catch(
-                console.error,
-            );
-        }
-    };
-
-    const handleReload = () => {
-        if (activeTabId) {
-            invoke("webview_reload", { label: `tab_${activeTabId}` }).catch(
-                console.error,
-            );
-        }
-    };
+        return () => {
+            unlistenPromise.then((fn) => fn());
+        };
+    }, [handleNewTab]);
 
     return (
         <div className="flex h-screen w-screen flex-col bg-slate-950 text-slate-100 overflow-hidden select-none">
@@ -229,16 +91,24 @@ export function App() {
                 activeTabId={activeTabId}
                 onSelectTab={handleSelectTab}
                 onCloseTab={handleCloseTab}
-                onNewTab={handleNewTab}
+                onNewTab={() => handleNewTab("")}
             />
 
             <NavigationBar
                 currentUrl={activeTab?.url || ""}
                 onNavigate={handleNavigate}
-                onGoBack={handleGoBack}
-                onGoForward={handleGoForward}
-                onReload={handleReload}
-                onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+                onGoBack={() =>
+                    invoke("webview_go_back", { label: `tab_${activeTabId}` })
+                }
+                onGoForward={() =>
+                    invoke("webview_go_forward", {
+                        label: `tab_${activeTabId}`,
+                    })
+                }
+                onReload={() =>
+                    invoke("webview_reload", { label: `tab_${activeTabId}` })
+                }
+                onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
                 isSidebarOpen={isSidebarOpen}
             />
 
@@ -253,9 +123,7 @@ export function App() {
                 {isSidebarOpen && (
                     <AIPanel
                         settings={aiSettings}
-                        onSaveSettings={(newSettings) =>
-                            setAiSettings(newSettings)
-                        }
+                        onSaveSettings={setAiSettings}
                     />
                 )}
             </div>
