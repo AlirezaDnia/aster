@@ -9,18 +9,9 @@ import { useTabManager } from "./hooks/useTabManager";
 import { useWebviewBounds } from "./hooks/useWebviewBounds";
 import { useAISettings } from "./hooks/useAISettings";
 
-interface TabStatePayload {
-    label: string;
-    url: string;
-    title: string;
-    favicon: string;
-    isLoading: boolean;
-}
-
 export function App() {
     const {
         tabs,
-        setTabs,
         activeTabId,
         activeTab,
         handleSelectTab,
@@ -34,7 +25,7 @@ export function App() {
     const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
     const { viewportRef } = useWebviewBounds(activeTabId, activeTab?.url);
 
-    // ۱. دریافت درخواست ساخت تب جدید
+    // دریافت درخواست ساخت تب جدید از نیتیو وب‌ویو
     useEffect(() => {
         const unlistenPromise = listen<string>("open-new-tab", (event) => {
             if (event.payload) {
@@ -46,53 +37,6 @@ export function App() {
             unlistenPromise.then((fn) => fn());
         };
     }, [handleNewTab]);
-
-    // ۲. دریافت تغییرات وضعیت وب‌ویو (حل قطعی مشکل پروگرس بار)
-    useEffect(() => {
-        const unlistenPromise = listen<TabStatePayload>(
-            "tab-state-changed",
-            (event) => {
-                const { label, url, title, favicon, isLoading } = event.payload;
-
-                // دریافت Label وب‌ویو و استخراج ID واقعی تب (مثلاً تبدیل tab_123 به 123)
-                const tabId = label.startsWith("tab_")
-                    ? label.replace("tab_", "")
-                    : label;
-
-                setTabs((prevTabs) =>
-                    prevTabs.map((tab) => {
-                        if (tab.id === tabId) {
-                            // جلوگیری از رندر مجدد در صورتی که دیتای جدید با دیتای فعلی دقیقا یکسان باشد
-                            if (
-                                tab.url === url &&
-                                tab.title === title &&
-                                tab.favicon === favicon &&
-                                tab.isLoading === isLoading
-                            ) {
-                                return tab;
-                            }
-
-                            return {
-                                ...tab,
-                                url: url || tab.url,
-                                title:
-                                    title && title !== "Loading..."
-                                        ? title
-                                        : tab.title,
-                                favicon: favicon || tab.favicon,
-                                isLoading: isLoading,
-                            };
-                        }
-                        return tab;
-                    }),
-                );
-            },
-        );
-
-        return () => {
-            unlistenPromise.then((fn) => fn());
-        };
-    }, [setTabs]);
 
     return (
         <div className="flex h-screen w-screen flex-col bg-slate-950 text-slate-100 overflow-hidden select-none">

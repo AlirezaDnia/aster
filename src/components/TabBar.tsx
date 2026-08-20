@@ -1,5 +1,6 @@
 import React, { useState, useRef } from "react";
 import { Tab } from "../types";
+import { ProgressBar } from "./ProgressBar";
 
 interface TabBarProps {
     tabs: Tab[];
@@ -51,13 +52,12 @@ export function TabBar({
 
     return (
         <div
-            className="flex items-center bg-slate-950 px-2 pt-2 gap-1 overflow-x-auto no-scrollbar border-b border-slate-800 select-none"
+            className="flex items-center bg-slate-950 px-2 pt-1.5 gap-1 overflow-x-auto no-scrollbar border-b border-slate-800/80 select-none"
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
         >
-            {/* تب برند Aster */}
             <div
-                className="flex items-center justify-center px-3 py-2 bg-slate-900/60 rounded-t-lg border-t border-x border-slate-800/50 text-indigo-400 font-bold text-sm cursor-default select-none mr-1"
+                className="flex items-center justify-center px-2.5 py-1.5 bg-slate-900/40 rounded-t-lg text-indigo-400 font-bold text-xs cursor-default mr-1 border-t border-x border-slate-800/40"
                 title="Aster Browser"
             >
                 <span>✱</span>
@@ -78,33 +78,35 @@ export function TabBar({
                                 onSelectTab(tab.id);
                             }
                         }}
-                        className={`group relative flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-t-lg cursor-grab active:cursor-grabbing max-w-[200px] min-w-[120px] transition-all duration-150 border-t border-x ${
+                        className={`group relative flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-t-lg cursor-grab active:cursor-grabbing max-w-[200px] min-w-[130px] transition-all duration-150 border-t border-x overflow-hidden ${
                             isActive
-                                ? "bg-slate-900 text-slate-100 border-slate-800"
-                                : "bg-slate-950 text-slate-400 border-transparent hover:bg-slate-900/50 hover:text-slate-200"
-                        } ${isBeingDragged ? "opacity-50 scale-95" : ""} ${
+                                ? "bg-slate-900 text-slate-100 border-slate-800/90 shadow-sm"
+                                : "bg-transparent text-slate-400 border-transparent hover:bg-slate-900/50 hover:text-slate-200"
+                        } ${isBeingDragged ? "opacity-40 scale-95" : ""} ${
                             isOver ? "border-b-2 border-b-indigo-500" : ""
                         }`}
                     >
-                        {/* Favicon */}
                         {tab.favicon ? (
                             <img
                                 src={tab.favicon}
                                 alt=""
-                                className="w-4 h-4 rounded-sm flex-shrink-0 pointer-events-none"
+                                className="w-3.5 h-3.5 rounded-sm flex-shrink-0 pointer-events-none"
+                                onError={(e) => {
+                                    (e.target as HTMLElement).style.display =
+                                        "none";
+                                }}
                             />
                         ) : (
-                            <div className="w-4 h-4 rounded-full bg-slate-700 flex-shrink-0 pointer-events-none" />
+                            <div className="w-3.5 h-3.5 rounded-full bg-slate-700/60 flex-shrink-0 pointer-events-none" />
                         )}
 
-                        {/* Title */}
-                        <span className="truncate flex-1 pointer-events-none">
+                        <span className="truncate flex-1 pointer-events-none text-[11px]">
                             {tab.title || "New Tab"}
                         </span>
 
-                        {/* Close Button */}
                         {tabs.length > 1 && (
                             <button
+                                type="button"
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     onCloseTab(tab.id);
@@ -115,20 +117,16 @@ export function TabBar({
                             </button>
                         )}
 
-                        {/* پروگرس بار تک بارگذاری */}
-                        {tab.isLoading && (
-                            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-slate-800/80 overflow-hidden rounded-b-md pointer-events-none">
-                                <div className="w-full h-full bg-gradient-to-r from-blue-500 via-cyan-400 to-indigo-500 animate-progress-line" />
-                            </div>
-                        )}
+                        {/* پروگرس‌بار اختصاصی تب در ضلع پایینی */}
+                        <ProgressBar isLoading={Boolean(tab.isLoading)} />
                     </div>
                 );
             })}
 
-            {/* New Tab Button */}
             <button
+                type="button"
                 onClick={onNewTab}
-                className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-900 rounded-lg transition-colors ml-1 select-none"
+                className="p-1 text-slate-400 hover:text-slate-100 hover:bg-slate-900/80 rounded-md transition-colors ml-0.5"
                 title="New Tab"
             >
                 +

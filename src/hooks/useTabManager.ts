@@ -19,7 +19,7 @@ export function useTabManager() {
 
     const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
-    // دریافت تغییرات از سمت Rust
+    // دریافت مستقیم event و بروزرسانی هوشمند State بدون Rerender اضافه
     useEffect(() => {
         const unlistenPromise = listen<TabStatePayload>(
             "tab-state-changed",
@@ -29,22 +29,33 @@ export function useTabManager() {
 
                 setTabs((prev) =>
                     prev.map((tab) => {
-                        if (tab.id === tabId) {
-                            return {
-                                ...tab,
-                                url: url || tab.url,
-                                title:
-                                    title && title.trim() !== ""
-                                        ? title
-                                        : tab.title,
-                                favicon: favicon || tab.favicon,
-                                isLoading:
-                                    typeof isLoading === "boolean"
-                                        ? isLoading
-                                        : tab.isLoading,
-                            };
+                        if (tab.id !== tabId) return tab;
+
+                        const updatedTitle =
+                            title && title.trim() !== "" ? title : tab.title;
+                        const updatedFavicon = favicon || tab.favicon;
+                        const updatedUrl = url || tab.url;
+                        const updatedLoading =
+                            typeof isLoading === "boolean"
+                                ? isLoading
+                                : tab.isLoading;
+
+                        if (
+                            tab.title === updatedTitle &&
+                            tab.favicon === updatedFavicon &&
+                            tab.url === updatedUrl &&
+                            tab.isLoading === updatedLoading
+                        ) {
+                            return tab;
                         }
-                        return tab;
+
+                        return {
+                            ...tab,
+                            title: updatedTitle,
+                            favicon: updatedFavicon,
+                            url: updatedUrl,
+                            isLoading: updatedLoading,
+                        };
                     }),
                 );
             },
@@ -153,7 +164,6 @@ export function useTabManager() {
         [activeTabId],
     );
 
-    // جابه‌جایی جایگاه تب‌ها هنگام درگ اند دراپ
     const reorderTabs = useCallback(
         (draggedIndex: number, targetIndex: number) => {
             setTabs((prevTabs) => {

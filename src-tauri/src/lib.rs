@@ -5,6 +5,7 @@ use tauri::{
 };
 
 #[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct TabStatePayload<'a> {
     label: &'a str,
     url: &'a str,
@@ -54,70 +55,70 @@ async fn create_or_show_tab_webview(
         }
     } else if !url.is_empty() && url != "about:blank" {
         let parsed_url = Url::parse(&url).map_err(|e| e.to_string())?;
-        let app_handle_nav = app.clone();
-        let app_handle_new_window = app.clone();
+        let app_handle = app.clone();
+        let app_handle_new = app.clone();
         let tab_label = label.clone();
 
-        // این اسکریپت پس از لود کامل حتماً isLoading را false می‌کند
-        let init_script = format!(
-            r#"
-            (function() {{
-                const tabLabel = '{}';
-
-                function getFavicon() {{
-                    const link = document.querySelector("link[rel*='icon']") || document.querySelector("link[rel='shortcut icon']");
-                    if (link && link.href) return link.href;
-                    return 'https://www.google.com/s2/favicons?domain=' + window.location.hostname + '&sz=32';
-                }}
-
-                function finishLoading() {{
-                    try {{
-                        window.__TAURI_INTERNALS__.invoke('plugin:event|emit', {{
-                            event: 'tab-state-changed',
-                            payload: {{
-                                label: tabLabel,
-                                url: window.location.href,
-                                title: document.title || window.location.hostname,
-                                favicon: getFavicon(),
-                                isLoading: false
-                            }}
-                        }});
-                    }} catch(e) {{}}
-                }}
-
-                if (document.readyState === 'complete') {{
-                    finishLoading();
-                }} else {{
-                    window.addEventListener('load', finishLoading, {{ once: true }});
-                    window.addEventListener('DOMContentLoaded', finishLoading, {{ once: true }});
-                    setTimeout(finishLoading, 3000);
-                }}
-            }})();
-            "#,
-            label
-        );
-
         let builder = WebviewBuilder::new(&label, WebviewUrl::External(parsed_url))
-            .initialization_script(&init_script)
             .on_navigation(move |nav_url| {
-                let default_favicon = format!(
-                    "https://www.google.com/s2/favicons?domain={}&sz=32",
-                    nav_url.host_str().unwrap_or("")
-                );
-                let _ = app_handle_nav.emit(
+                let domain = nav_url.host_str().unwrap_or("").to_string();
+                let favicon = format!("https://www.google.com/s2/favicons?domain={}&sz=32", domain);
+                let app = app_handle.clone();
+                let label_clone = tab_label.clone();
+                let url_str = nav_url.as_str().to_string();
+
+                // ۱. شروع لودینگ با عنوان موقت (دامنه)
+                let _ = app.emit(
                     "tab-state-changed",
                     TabStatePayload {
-                        label: &tab_label,
-                        url: nav_url.as_str(),
-                        title: nav_url.host_str().unwrap_or("Loading..."),
-                        favicon: &default_favicon,
+                        label: &label_clone,
+                        url: &url_str,
+                        title: if domain.is_empty() {
+                            "Loading..."
+                        } else {
+                            &domain
+                        },
+                        favicon: &favicon,
                         is_loading: true,
                     },
                 );
+
+                // ۲. پایان لودینگ پس از ۱.۵ ثانیه
+                let app_finish = app.clone();
+                let label_finish = label_clone.clone();
+                let url_finish = url_str.clone();
+                let domain_finish = domain.clone();
+                let favicon_finish = favicon.clone();
+
+                tauri::async_runtime::spawn(async move {
+                    tauri::async_runtime::spawn_blocking(|| {
+                        std::thread::sleep(std::time::Duration::from_millis(1500));
+                    })
+                    .await
+                    .ok();
+
+                    let final_title = if !domain_finish.is_empty() {
+                        domain_finish
+                    } else {
+                        "New Tab".to_string()
+                    };
+
+                    let _ = app_finish.emit(
+                        "tab-state-changed",
+                        TabStatePayload {
+                            label: &label_finish,
+                            url: &url_finish,
+                            title: &final_title,
+                            favicon: &favicon_finish,
+                            is_loading: false,
+                        },
+                    );
+                });
+
                 true
             })
             .on_new_window(move |url, _| {
-                let _ = app_handle_new_window.emit("open-new-tab", url.as_str());
+                let _ = app_handle_new.emit("open-new-tab", url.as_str());
                 NewWindowResponse::Deny
             });
 

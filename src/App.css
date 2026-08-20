@@ -1,23 +1,6 @@
 @import "tailwindcss";
 
-/* ۱. تعریف استاندارد Keyframes و انیمیشن برای Tailwind v4 */
-@keyframes progressLine {
-    0% {
-        transform: translateX(-100%);
-    }
-    50% {
-        transform: translateX(-20%);
-    }
-    100% {
-        transform: translateX(100%);
-    }
-}
-
-@theme {
-    --animate-progress-line: progressLine 1.2s infinite ease-in-out;
-}
-
-/* ۲. حذف کامل Focus Ring مرورگر بدون آسیب به Drag and Drop */
+/* حذف کامل Focus Ring و هایلایت‌های اضافی */
 *:focus,
 *:focus-visible,
 *:active {
@@ -26,8 +9,16 @@
     -webkit-tap-highlight-color: transparent !important;
 }
 
-/* ۳. کلاس کمکی جهت عدم تداخل لایه متون با Drag & Drop */
 .drag-handle {
     -webkit-user-drag: element;
     user-select: none;
+}
+
+/* اسکرول‌بار مخفی برای نوار تب‌ها */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
 }

@@ -1,5 +1,11 @@
-import React, { useState, useEffect } from "react";
-import { ArrowLeft, ArrowRight, RotateCw, Sparkles, Lock } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import {
+    ArrowLeft,
+    ArrowRight,
+    RotateCw,
+    Sparkles,
+    SlidersHorizontal,
+} from "lucide-react";
 
 interface NavigationBarProps {
     currentUrl: string;
@@ -21,19 +27,27 @@ export function NavigationBar({
     isSidebarOpen,
 }: NavigationBarProps) {
     const [inputUrl, setInputUrl] = useState(currentUrl);
+    const [isFocused, setIsFocused] = useState(false);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    const formatUrlForDisplay = (url: string) => {
+        if (!url) return "";
+        return url.replace(/^https?:\/\//i, "");
+    };
 
     useEffect(() => {
-        setInputUrl(currentUrl);
-    }, [currentUrl]);
+        if (!isFocused) {
+            setInputUrl(formatUrlForDisplay(currentUrl));
+        }
+    }, [currentUrl, isFocused]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        inputRef.current?.blur();
         const query = inputUrl.trim();
         if (!query) return;
 
         let targetUrl = query;
-
-        // بررسی اینکه ورودی URL است یا کلمه برای سرچ
         const isUrlPattern =
             /^https?:\/\//i.test(query) ||
             (query.includes(".") && !query.includes(" "));
@@ -47,41 +61,65 @@ export function NavigationBar({
         onNavigate(targetUrl);
     };
 
+    const handleFocus = () => {
+        setIsFocused(true);
+        setInputUrl(currentUrl);
+        setTimeout(() => inputRef.current?.select(), 10);
+    };
+
     return (
-        <div className="flex h-12 w-full items-center gap-2 bg-slate-900 px-3 border-b border-slate-800 select-none">
-            <div className="flex items-center gap-1 text-slate-400">
+        <div className="relative flex h-11 w-full items-center gap-2 bg-slate-950 px-3 border-b border-slate-800/80 select-none">
+            <div className="flex items-center gap-0.5 text-slate-400">
                 <button
                     type="button"
                     onClick={onGoBack}
-                    className="rounded-lg p-1.5 hover:bg-slate-800 hover:text-slate-200 transition-colors outline-none focus:outline-none focus:ring-0"
+                    className="rounded-full p-1.5 hover:bg-slate-800/80 hover:text-slate-100 transition-colors"
                 >
                     <ArrowLeft className="h-4 w-4" />
                 </button>
                 <button
                     type="button"
                     onClick={onGoForward}
-                    className="rounded-lg p-1.5 hover:bg-slate-800 hover:text-slate-200 transition-colors outline-none focus:outline-none focus:ring-0"
+                    className="rounded-full p-1.5 hover:bg-slate-800/80 hover:text-slate-100 transition-colors"
                 >
                     <ArrowRight className="h-4 w-4" />
                 </button>
                 <button
                     type="button"
                     onClick={onReload}
-                    className="rounded-lg p-1.5 hover:bg-slate-800 hover:text-slate-200 transition-colors outline-none focus:outline-none focus:ring-0"
+                    className="rounded-full p-1.5 hover:bg-slate-800/80 hover:text-slate-100 transition-colors"
                 >
                     <RotateCw className="h-4 w-4" />
                 </button>
             </div>
 
             <form onSubmit={handleSubmit} className="flex flex-1 items-center">
-                <div className="flex h-8 w-full items-center gap-2 rounded-lg bg-slate-950 px-3 border border-slate-800/80 focus-within:border-indigo-500/50 transition-colors">
-                    <Lock className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                <div
+                    className={`flex h-8 w-full items-center gap-2 rounded-full bg-slate-900 px-3 border transition-all duration-150 ${
+                        isFocused
+                            ? "border-indigo-500/80 bg-slate-900/90 shadow-sm shadow-indigo-500/10"
+                            : "border-slate-800/80 hover:border-slate-700"
+                    }`}
+                >
+                    <button
+                        type="button"
+                        className="text-slate-400 hover:text-slate-200"
+                    >
+                        <SlidersHorizontal className="h-3.5 w-3.5" />
+                    </button>
+
                     <input
+                        ref={inputRef}
                         type="text"
                         value={inputUrl}
+                        onFocus={handleFocus}
+                        onBlur={() => {
+                            setIsFocused(false);
+                            setInputUrl(formatUrlForDisplay(currentUrl));
+                        }}
                         onChange={(e) => setInputUrl(e.target.value)}
-                        placeholder="Search with Google or enter address"
-                        className="w-full bg-transparent text-xs text-slate-200 placeholder-slate-500 outline-none focus:outline-none focus:ring-0"
+                        placeholder="Search Google or type a URL"
+                        className="w-full bg-transparent text-xs text-slate-200 placeholder-slate-500 outline-none font-normal"
                     />
                 </div>
             </form>
@@ -89,10 +127,10 @@ export function NavigationBar({
             <button
                 type="button"
                 onClick={onToggleSidebar}
-                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all outline-none focus:outline-none focus:ring-0 ${
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all ${
                     isSidebarOpen
                         ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-                        : "bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white"
+                        : "bg-slate-900 text-slate-300 border border-slate-800 hover:bg-slate-800 hover:text-white"
                 }`}
             >
                 <Sparkles className="h-3.5 w-3.5" />
