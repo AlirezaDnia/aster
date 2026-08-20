@@ -1,18 +1,33 @@
-/* App.css*/
 @import "tailwindcss";
 
-@layer base {
-    *,
-    *::before,
-    *::after {
-        @apply focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0;
+/* ۱. تعریف استاندارد Keyframes و انیمیشن برای Tailwind v4 */
+@keyframes progressLine {
+    0% {
+        transform: translateX(-100%);
+    }
+    50% {
+        transform: translateX(-20%);
+    }
+    100% {
+        transform: translateX(100%);
     }
 }
 
-/* تضمین نهایی برای حذف Focus Ring تمام مرورگرها */
+@theme {
+    --animate-progress-line: progressLine 1.2s infinite ease-in-out;
+}
+
+/* ۲. حذف کامل Focus Ring مرورگر بدون آسیب به Drag and Drop */
 *:focus,
 *:focus-visible,
 *:active {
     outline: none !important;
     box-shadow: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+}
+
+/* ۳. کلاس کمکی جهت عدم تداخل لایه متون با Drag & Drop */
+.drag-handle {
+    -webkit-user-drag: element;
+    user-select: none;
 }

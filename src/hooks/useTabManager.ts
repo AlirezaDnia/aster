@@ -1,6 +1,15 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { Tab } from "../types";
+
+interface TabStatePayload {
+    label: string;
+    url: string;
+    title: string;
+    favicon?: string;
+    isLoading?: boolean;
+}
 
 export function useTabManager() {
     const [tabs, setTabs] = useState<Tab[]>([
@@ -10,37 +19,89 @@ export function useTabManager() {
 
     const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
-    const handleSelectTab = useCallback((id: string) => {
-        setActiveTabId((prevId) => {
-            if (prevId !== id) {
-                invoke("hide_tab_webview", { label: `tab_${prevId}` }).catch(
-                    () => {},
+    // دریافت تغییرات از سمت Rust
+    useEffect(() => {
+        const unlistenPromise = listen<TabStatePayload>(
+            "tab-state-changed",
+            (event) => {
+                const { label, url, title, favicon, isLoading } = event.payload;
+                const tabId = label.replace("tab_", "");
+
+                setTabs((prev) =>
+                    prev.map((tab) => {
+                        if (tab.id === tabId) {
+                            return {
+                                ...tab,
+                                url: url || tab.url,
+                                title:
+                                    title && title.trim() !== ""
+                                        ? title
+                                        : tab.title,
+                                favicon: favicon || tab.favicon,
+                                isLoading:
+                                    typeof isLoading === "boolean"
+                                        ? isLoading
+                                        : tab.isLoading,
+                            };
+                        }
+                        return tab;
+                    }),
                 );
-            }
-            return id;
-        });
-    }, []);
+            },
+        );
 
-    const handleNewTab = useCallback((initialUrl: string = "") => {
-        setActiveTabId((currentActive) => {
-            invoke("hide_tab_webview", { label: `tab_${currentActive}` }).catch(
-                () => {},
-            );
-            return currentActive;
-        });
-
-        const newId = Date.now().toString();
-        const newTab: Tab = {
-            id: newId,
-            title: initialUrl ? initialUrl : "New Tab",
-            url: initialUrl,
-            isLoading: false,
+        return () => {
+            unlistenPromise.then((fn) => fn());
         };
-
-        setTabs((prev) => [...prev, newTab]);
-        setActiveTabId(newId);
-        return newId;
     }, []);
+
+    const handleSelectTab = useCallback(
+        (id: string) => {
+            const targetTab = tabs.find((t) => t.id === id);
+            if (
+                targetTab &&
+                (!targetTab.url || targetTab.url === "about:blank")
+            ) {
+                invoke("hide_tab_webview", {
+                    label: `tab_${activeTabId}`,
+                }).catch(() => {});
+            }
+            setActiveTabId(id);
+        },
+        [tabs, activeTabId],
+    );
+
+    const handleNewTab = useCallback(
+        (initialUrl: string = "") => {
+            if (activeTabId) {
+                invoke("hide_tab_webview", {
+                    label: `tab_${activeTabId}`,
+                }).catch(() => {});
+            }
+
+            const newId = Date.now().toString();
+
+            let formattedUrl = initialUrl.trim();
+            if (formattedUrl && !/^https?:\/\//i.test(formattedUrl)) {
+                formattedUrl =
+                    formattedUrl.includes(".") && !formattedUrl.includes(" ")
+                        ? `https://${formattedUrl}`
+                        : `https://www.google.com/search?q=${encodeURIComponent(formattedUrl)}`;
+            }
+
+            const newTab: Tab = {
+                id: newId,
+                title: formattedUrl ? "Loading..." : "New Tab",
+                url: formattedUrl,
+                isLoading: Boolean(formattedUrl),
+            };
+
+            setTabs((prev) => [...prev, newTab]);
+            setActiveTabId(newId);
+            return newId;
+        },
+        [activeTabId],
+    );
 
     const handleCloseTab = useCallback((id: string) => {
         invoke("close_tab_webview", { label: `tab_${id}` }).catch(
@@ -66,6 +127,8 @@ export function useTabManager() {
     const handleNavigate = useCallback(
         (input: string) => {
             let targetUrl = input.trim();
+            if (!targetUrl) return;
+
             if (!/^https?:\/\//i.test(targetUrl)) {
                 targetUrl =
                     targetUrl.includes(".") && !targetUrl.includes(" ")
@@ -74,12 +137,33 @@ export function useTabManager() {
             }
 
             setTabs((prev) =>
-                prev.map((tab) =>
-                    tab.id === activeTabId ? { ...tab, url: targetUrl } : tab,
-                ),
+                prev.map((tab) => {
+                    if (tab.id === activeTabId) {
+                        return {
+                            ...tab,
+                            url: targetUrl,
+                            title: "Loading...",
+                            isLoading: true,
+                        };
+                    }
+                    return tab;
+                }),
             );
         },
         [activeTabId],
+    );
+
+    // جابه‌جایی جایگاه تب‌ها هنگام درگ اند دراپ
+    const reorderTabs = useCallback(
+        (draggedIndex: number, targetIndex: number) => {
+            setTabs((prevTabs) => {
+                const result = Array.from(prevTabs);
+                const [removed] = result.splice(draggedIndex, 1);
+                result.splice(targetIndex, 0, removed);
+                return result;
+            });
+        },
+        [],
     );
 
     return {
@@ -92,5 +176,6 @@ export function useTabManager() {
         handleNewTab,
         handleCloseTab,
         handleNavigate,
+        reorderTabs,
     };
 }

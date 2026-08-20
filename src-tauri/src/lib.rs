@@ -33,7 +33,10 @@ async fn create_or_show_tab_webview(
 
         if !url.is_empty() && url != "about:blank" {
             if let Ok(current_url) = webview.url() {
-                if current_url.as_str() != url {
+                let current_str = current_url.as_str().trim_end_matches('/');
+                let target_str = url.trim_end_matches('/');
+
+                if current_str != target_str {
                     if let Ok(parsed_url) = Url::parse(&url) {
                         let _ = webview.navigate(parsed_url);
                     }
@@ -41,38 +44,25 @@ async fn create_or_show_tab_webview(
             }
         }
 
-        // اول نمایش تب جدید
         let _ = webview.show();
         let _ = webview.set_focus();
 
-        // سپس مخفی‌سازی سایر تب‌ها پس از متمرکز شدن
         for (name, other_webview) in app.webviews() {
             if name.starts_with("tab_") && name != label {
                 let _ = other_webview.hide();
             }
         }
-    } else if !url.is_empty() {
+    } else if !url.is_empty() && url != "about:blank" {
         let parsed_url = Url::parse(&url).map_err(|e| e.to_string())?;
         let app_handle_nav = app.clone();
         let app_handle_new_window = app.clone();
         let tab_label = label.clone();
 
+        // این اسکریپت پس از لود کامل حتماً isLoading را false می‌کند
         let init_script = format!(
             r#"
             (function() {{
                 const tabLabel = '{}';
-
-                const origOpen = window.open;
-                window.open = function(url, target, features) {{
-                    if (url) {{
-                        window.__TAURI_INTERNALS__.invoke('plugin:event|emit', {{
-                            event: 'open-new-tab',
-                            payload: new URL(url, window.location.href).href
-                        }});
-                        return null;
-                    }}
-                    return origOpen.apply(this, arguments);
-                }};
 
                 function getFavicon() {{
                     const link = document.querySelector("link[rel*='icon']") || document.querySelector("link[rel='shortcut icon']");
@@ -80,48 +70,28 @@ async fn create_or_show_tab_webview(
                     return 'https://www.google.com/s2/favicons?domain=' + window.location.hostname + '&sz=32';
                 }}
 
-                function sendState(isLoading) {{
-                    window.__TAURI_INTERNALS__.invoke('plugin:event|emit', {{
-                        event: 'tab-state-changed',
-                        payload: {{
-                            label: tabLabel,
-                            url: window.location.href,
-                            title: document.title || window.location.hostname,
-                            favicon: getFavicon(),
-                            isLoading: Boolean(isLoading)
-                        }}
-                    }});
+                function finishLoading() {{
+                    try {{
+                        window.__TAURI_INTERNALS__.invoke('plugin:event|emit', {{
+                            event: 'tab-state-changed',
+                            payload: {{
+                                label: tabLabel,
+                                url: window.location.href,
+                                title: document.title || window.location.hostname,
+                                favicon: getFavicon(),
+                                isLoading: false
+                            }}
+                        }});
+                    }} catch(e) {{}}
                 }}
 
-                // ارسال وضعیت در مراحل مختلف بارگذاری
-                if (document.readyState === 'loading') {{
-                    sendState(true);
+                if (document.readyState === 'complete') {{
+                    finishLoading();
                 }} else {{
-                    sendState(false);
+                    window.addEventListener('load', finishLoading, {{ once: true }});
+                    window.addEventListener('DOMContentLoaded', finishLoading, {{ once: true }});
+                    setTimeout(finishLoading, 3000);
                 }}
-
-                window.addEventListener('beforeunload', () => sendState(true));
-                window.addEventListener('DOMContentLoaded', () => sendState(false));
-                window.addEventListener('load', () => sendState(false));
-
-                const titleObserver = new MutationObserver(() => sendState(false));
-                if (document.querySelector('title')) {{
-                    titleObserver.observe(document.querySelector('title'), {{ childList: true, characterData: true, subtree: true }});
-                }}
-
-                const origPushState = history.pushState;
-                history.pushState = function() {{
-                    origPushState.apply(this, arguments);
-                    sendState(false);
-                }};
-
-                const origReplaceState = history.replaceState;
-                history.replaceState = function() {{
-                    origReplaceState.apply(this, arguments);
-                    sendState(false);
-                }};
-
-                window.addEventListener('popstate', () => sendState(false));
             }})();
             "#,
             label
