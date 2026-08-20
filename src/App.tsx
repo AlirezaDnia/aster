@@ -52,6 +52,8 @@ export function App() {
 
                 <NavigationBar
                     currentUrl={activeTab?.url || ""}
+                    activeTabId={activeTabId} // 👈 اضافه شد
+                    onNewTab={() => handleNewTab("")} // 👈 اضافه شد
                     onNavigate={handleNavigate}
                     onGoBack={() =>
                         invoke("webview_go_back", {

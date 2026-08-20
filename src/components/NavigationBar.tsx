@@ -5,10 +5,14 @@ import {
     RotateCw,
     Sparkles,
     SlidersHorizontal,
+    MoreVertical,
 } from "lucide-react";
+import { MenuDropdown } from "./MenuDropdown";
 
 interface NavigationBarProps {
     currentUrl: string;
+    activeTabId: string;
+    onNewTab: () => void;
     onNavigate: (url: string) => void;
     onGoBack: () => void;
     onGoForward: () => void;
@@ -19,6 +23,8 @@ interface NavigationBarProps {
 
 export function NavigationBar({
     currentUrl,
+    activeTabId,
+    onNewTab,
     onNavigate,
     onGoBack,
     onGoForward,
@@ -28,6 +34,7 @@ export function NavigationBar({
 }: NavigationBarProps) {
     const [inputUrl, setInputUrl] = useState(currentUrl);
     const [isFocused, setIsFocused] = useState(false);
+    const [isMenuOpen, setIsMenuOpen] = useState(false); // 👈 تعریف استیت منو
     const inputRef = useRef<HTMLInputElement>(null);
 
     const formatUrlForDisplay = (url: string) => {
@@ -69,6 +76,7 @@ export function NavigationBar({
 
     return (
         <div className="relative flex h-11 w-full items-center gap-2 bg-slate-950 px-3 border-b border-slate-800/80 select-none">
+            {/* دکمه‌های ناوبری چپ */}
             <div className="flex items-center gap-0.5 text-slate-400">
                 <button
                     type="button"
@@ -93,6 +101,7 @@ export function NavigationBar({
                 </button>
             </div>
 
+            {/* آدرس‌بار */}
             <form onSubmit={handleSubmit} className="flex flex-1 items-center">
                 <div
                     className={`flex h-8 w-full items-center gap-2 rounded-full bg-slate-900 px-3 border transition-all duration-150 ${
@@ -124,18 +133,39 @@ export function NavigationBar({
                 </div>
             </form>
 
-            <button
-                type="button"
-                onClick={onToggleSidebar}
-                className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all ${
-                    isSidebarOpen
-                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-                        : "bg-slate-900 text-slate-300 border border-slate-800 hover:bg-slate-800 hover:text-white"
-                }`}
-            >
-                <Sparkles className="h-3.5 w-3.5" />
-                <span>Aster AI</span>
-            </button>
+            {/* بخش سمت راست: دکمه هوش مصنوعی و منوی سه‌نقطه */}
+            <div className="flex items-center gap-1.5">
+                <button
+                    type="button"
+                    onClick={onToggleSidebar}
+                    className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                        isSidebarOpen
+                            ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+                            : "bg-slate-900 text-slate-300 border border-slate-800 hover:bg-slate-800 hover:text-white"
+                    }`}
+                >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    <span>Aster AI</span>
+                </button>
+
+                {/* دکمه منوی سه‌نقطه React */}
+                <div className="relative">
+                    <button
+                        type="button"
+                        onClick={() => setIsMenuOpen((prev) => !prev)}
+                        className="rounded-full p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-100 transition-colors"
+                    >
+                        <MoreVertical className="h-4 w-4" />
+                    </button>
+
+                    <MenuDropdown
+                        isOpen={isMenuOpen}
+                        onClose={() => setIsMenuOpen(false)}
+                        onNewTab={onNewTab}
+                        onReload={onReload}
+                    />
+                </div>
+            </div>
         </div>
     );
 }
