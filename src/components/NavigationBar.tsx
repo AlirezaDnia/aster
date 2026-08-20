@@ -7,11 +7,10 @@ import {
     SlidersHorizontal,
     MoreVertical,
 } from "lucide-react";
-import { MenuDropdown } from "./MenuDropdown";
 
 interface NavigationBarProps {
     currentUrl: string;
-    activeTabId: string;
+    activeTabId: string | null;
     onNewTab: () => void;
     onNavigate: (url: string) => void;
     onGoBack: () => void;
@@ -19,6 +18,8 @@ interface NavigationBarProps {
     onReload: () => void;
     onToggleSidebar: () => void;
     isSidebarOpen: boolean;
+    onToggleMenu: () => void; // 👈 کنترل سایدبار منو از App.tsx
+    isMenuOpen: boolean; // 👈 استیت فعال بودن منو
 }
 
 export function NavigationBar({
@@ -31,10 +32,11 @@ export function NavigationBar({
     onReload,
     onToggleSidebar,
     isSidebarOpen,
+    onToggleMenu,
+    isMenuOpen,
 }: NavigationBarProps) {
     const [inputUrl, setInputUrl] = useState(currentUrl);
     const [isFocused, setIsFocused] = useState(false);
-    const [isMenuOpen, setIsMenuOpen] = useState(false); // 👈 تعریف استیت منو
     const inputRef = useRef<HTMLInputElement>(null);
 
     const formatUrlForDisplay = (url: string) => {
@@ -133,7 +135,7 @@ export function NavigationBar({
                 </div>
             </form>
 
-            {/* بخش سمت راست: دکمه هوش مصنوعی و منوی سه‌نقطه */}
+            {/* بخش سمت راست: دکمه هوش مصنوعی و دکمه باز کردن سایدبار منو */}
             <div className="flex items-center gap-1.5">
                 <button
                     type="button"
@@ -148,23 +150,18 @@ export function NavigationBar({
                     <span>Aster AI</span>
                 </button>
 
-                {/* دکمه منوی سه‌نقطه React */}
-                <div className="relative">
-                    <button
-                        type="button"
-                        onClick={() => setIsMenuOpen((prev) => !prev)}
-                        className="rounded-full p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-100 transition-colors"
-                    >
-                        <MoreVertical className="h-4 w-4" />
-                    </button>
-
-                    <MenuDropdown
-                        isOpen={isMenuOpen}
-                        onClose={() => setIsMenuOpen(false)}
-                        onNewTab={onNewTab}
-                        onReload={onReload}
-                    />
-                </div>
+                {/* دکمه منوی سه‌نقطه که سایدبار را کنترل می‌کند */}
+                <button
+                    type="button"
+                    onClick={onToggleMenu}
+                    className={`rounded-full p-1.5 transition-colors ${
+                        isMenuOpen
+                            ? "bg-slate-800 text-slate-100"
+                            : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                    }`}
+                >
+                    <MoreVertical className="h-4 w-4" />
+                </button>
             </div>
         </div>
     );

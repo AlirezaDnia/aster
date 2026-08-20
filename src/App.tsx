@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { TabBar } from "./components/TabBar";
 import { NavigationBar } from "./components/NavigationBar";
 import { AIPanel } from "./components/AIPanel";
+import { MenuSidebar } from "./components/MenuSidebar";
 import { StartPage } from "./components/StartPage";
 import { useTabManager } from "./hooks/useTabManager";
 import { useWebviewBounds } from "./hooks/useWebviewBounds";
@@ -23,7 +24,15 @@ export function App() {
 
     const { aiSettings, setAiSettings } = useAISettings();
     const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
-    const { viewportRef } = useWebviewBounds(activeTabId, activeTab?.url);
+    const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
+
+    // پاس دادن حالت هر دو سایدبار به هوک محاسباتی برای تغییر ابعاد آنی Webview
+    const { viewportRef } = useWebviewBounds(
+        activeTabId,
+        activeTab?.url,
+        isSidebarOpen,
+        isMenuOpen,
+    );
 
     // دریافت درخواست ساخت تب جدید از نیتیو وب‌ویو
     useEffect(() => {
@@ -52,8 +61,8 @@ export function App() {
 
                 <NavigationBar
                     currentUrl={activeTab?.url || ""}
-                    activeTabId={activeTabId} // 👈 اضافه شد
-                    onNewTab={() => handleNewTab("")} // 👈 اضافه شد
+                    activeTabId={activeTabId}
+                    onNewTab={() => handleNewTab("")}
                     onNavigate={handleNavigate}
                     onGoBack={() =>
                         invoke("webview_go_back", {
@@ -70,12 +79,21 @@ export function App() {
                             label: `tab_${activeTabId}`,
                         })
                     }
-                    onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+                    onToggleSidebar={() => {
+                        setIsSidebarOpen((prev) => !prev);
+                        if (isMenuOpen) setIsMenuOpen(false); // بستن منو در صورت باز شدن AI
+                    }}
                     isSidebarOpen={isSidebarOpen}
+                    onToggleMenu={() => {
+                        setIsMenuOpen((prev) => !prev);
+                        if (isSidebarOpen) setIsSidebarOpen(false); // بستن AI در صورت باز شدن منو
+                    }}
+                    isMenuOpen={isMenuOpen}
                 />
             </header>
 
             <div className="flex flex-1 overflow-hidden relative">
+                {/* وب‌ویوی اصلی سایت */}
                 <main
                     ref={viewportRef}
                     className="flex-1 bg-slate-900 flex items-center justify-center overflow-hidden"
@@ -85,6 +103,16 @@ export function App() {
                     )}
                 </main>
 
+                {/* سایدبار منوی اصلی */}
+                {isMenuOpen && (
+                    <MenuSidebar
+                        onClose={() => setIsMenuOpen(false)}
+                        onNewTab={() => handleNewTab("")}
+                        activeTabId={activeTabId}
+                    />
+                )}
+
+                {/* سایدبار AI */}
                 {isSidebarOpen && (
                     <AIPanel
                         settings={aiSettings}

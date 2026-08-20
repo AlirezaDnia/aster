@@ -2,7 +2,6 @@ use serde::Serialize;
 use tauri::{
     webview::{NewWindowResponse, PageLoadEvent},
     AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Url, WebviewBuilder, WebviewUrl,
-    WebviewWindowBuilder,
 };
 
 #[derive(Clone, Serialize)]
@@ -13,50 +12,6 @@ struct TabStatePayload<'a> {
     title: &'a str,
     favicon: &'a str,
     is_loading: bool,
-}
-
-#[tauri::command]
-async fn toggle_menu_popup(app: AppHandle, x: f64, y: f64) -> Result<(), String> {
-    if let Some(popup) = app.get_webview_window("menu_popup") {
-        let _ = popup.close();
-        return Ok(());
-    }
-
-    let main_window = app
-        .get_webview_window("main")
-        .ok_or("Main window not found")?;
-
-    // محاسبه موقعیت دقیق نسبت به موقعیت فعلی پنجره اصلی
-    let main_pos = main_window.outer_position().map_err(|e| e.to_string())?;
-
-    let absolute_x = main_pos.x as f64 + x;
-    let absolute_y = main_pos.y as f64 + y;
-
-    // عدم استفاده از .parent() جهت جلوگیری از گیر افتادن زیر Child Webviewها
-    let popup = WebviewWindowBuilder::new(
-        &app,
-        "menu_popup",
-        WebviewUrl::App("index.html#/menu-popup".into()),
-    )
-    .inner_size(240.0, 300.0)
-    .position(absolute_x, absolute_y)
-    .decorations(false)
-    .transparent(true)
-    .always_on_top(true)
-    .focused(true)
-    .skip_taskbar(true)
-    .build()
-    .map_err(|e| e.to_string())?;
-
-    // بستن اتوماتیک موقع کلیک خارج از پنجره یا تغییر فوکوس
-    let popup_clone = popup.clone();
-    popup.on_window_event(move |event| {
-        if let tauri::WindowEvent::Focused(false) = event {
-            let _ = popup_clone.close();
-        }
-    });
-
-    Ok(())
 }
 
 #[tauri::command]
@@ -73,7 +28,7 @@ async fn create_or_show_tab_webview(
     let pos = LogicalPosition::new(x, y);
     let size = LogicalSize::new(width, height);
 
-    // ۱. وب‌ویو موجود: فقط تغییر سایز/موقعیت و ناوبری صریح با شرط دقیق
+    // ۱. اگر وب‌ویو از قبل وجود دارد: تنظیم ابعاد و در صورت نیاز تغییر آدرس
     if let Some(webview) = app.get_webview(&label) {
         let _ = webview.set_position(pos);
         let _ = webview.set_size(size);
@@ -83,7 +38,6 @@ async fn create_or_show_tab_webview(
                 let current_str = current_url.as_str().trim_end_matches('/');
                 let target_str = url.trim_end_matches('/');
 
-                // ناوبری فقط زمانی که کاربر واقعاً آدرس متفاوتی را ارسال کرده باشد
                 if current_str != target_str && !target_str.is_empty() {
                     if let Ok(parsed_url) = Url::parse(&url) {
                         let _ = webview.navigate(parsed_url);
@@ -95,13 +49,14 @@ async fn create_or_show_tab_webview(
         let _ = webview.show();
         let _ = webview.set_focus();
 
+        // مخفی‌سازی سایر تب‌ها
         for (name, other_webview) in app.webviews() {
             if name.starts_with("tab_") && name != label {
                 let _ = other_webview.hide();
             }
         }
     }
-    // ۲. وب‌ویو جدید: ساخت با Lifecycle نیتیو
+    // ۲. اگر وب‌ویو وجود ندارد: ساخت تب جدید
     else if !url.is_empty() && url != "about:blank" {
         let parsed_url = Url::parse(&url).map_err(|e| e.to_string())?;
         let app_handle = app.clone();
@@ -241,7 +196,6 @@ pub fn run() {
             webview_go_forward,
             webview_reload,
             set_webview_zoom,
-            toggle_menu_popup // 👈 دستور جدید اینجا اضافه شد
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

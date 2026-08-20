@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
-export function useWebviewBounds(activeTabId: string, activeUrl?: string) {
+export function useWebviewBounds(
+    activeTabId: string | null,
+    activeUrl?: string,
+    isSidebarOpen?: boolean,
+    isMenuOpen?: boolean,
+) {
     const viewportRef = useRef<HTMLDivElement>(null);
 
     const updateBounds = useCallback(() => {
@@ -28,19 +33,18 @@ export function useWebviewBounds(activeTabId: string, activeUrl?: string) {
         }).catch(console.error);
     }, [activeTabId, activeUrl]);
 
-    // اجرای بهینه‌سازی ابعاد هنگام تغییر تب یا آدرس
+    // اجرای بهینه‌سازی ابعاد هنگام تغییر تب، آدرس، سایدبار هوش مصنوعی یا منو
     useEffect(() => {
         updateBounds();
-    }, [updateBounds]);
+    }, [updateBounds, isSidebarOpen, isMenuOpen]);
 
-    // شنیدن تغییرات سایز Element (مثل باز و بسته‌شدن AIPanel)
+    // شنیدن تغییرات سایز Element (مثل باز و بسته‌شدن AIPanel یا MenuSidebar)
     useEffect(() => {
         if (!viewportRef.current) return;
 
         let animationFrameId: number;
 
         const observer = new ResizeObserver(() => {
-            // استفاده از requestAnimationFrame برای همگام‌سازی با رندر GPU و حذف پرپر زدن
             animationFrameId = requestAnimationFrame(updateBounds);
         });
 
