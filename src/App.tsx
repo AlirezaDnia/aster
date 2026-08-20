@@ -39,14 +39,15 @@ export function App() {
         localStorage.setItem("aster_ai_settings", JSON.stringify(aiSettings));
     }, [aiSettings]);
 
-    // شنیدن تغییرات State وب‌ویو
     useEffect(() => {
         const unlistenPromise = listen<{
             label: string;
             url: string;
             title: string;
+            favicon?: string;
+            isLoading?: boolean;
         }>("tab-state-changed", (event) => {
-            const { label, url, title } = event.payload;
+            const { label, url, title, favicon, isLoading } = event.payload;
             const tabId = label.replace("tab_", "");
 
             setTabs((prev) =>
@@ -59,6 +60,11 @@ export function App() {
                                 title && title.trim() !== ""
                                     ? title
                                     : tab.title,
+                            favicon: favicon || tab.favicon,
+                            isLoading:
+                                typeof isLoading === "boolean"
+                                    ? isLoading
+                                    : tab.isLoading,
                         };
                     }
                     return tab;
@@ -71,7 +77,6 @@ export function App() {
         };
     }, [setTabs]);
 
-    // شنیدن رویداد باز شدن تب جدید از سمت Rust
     useEffect(() => {
         const unlistenPromise = listen<string>("open-new-tab", (event) => {
             if (event.payload) {
