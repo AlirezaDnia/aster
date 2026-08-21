@@ -7,6 +7,7 @@ import {
     SlidersHorizontal,
     MoreVertical,
     Puzzle,
+    Download,
 } from "lucide-react";
 
 interface NavigationBarProps {
@@ -23,6 +24,8 @@ interface NavigationBarProps {
     isExtensionsOpen: boolean;
     onToggleMenu: () => void;
     isMenuOpen: boolean;
+    hasUnreadDownloads?: boolean;
+    onOpenDownloads?: () => void;
 }
 
 export function NavigationBar({
@@ -39,15 +42,15 @@ export function NavigationBar({
     isExtensionsOpen,
     onToggleMenu,
     isMenuOpen,
+    hasUnreadDownloads,
+    onOpenDownloads,
 }: NavigationBarProps) {
     const [inputUrl, setInputUrl] = useState(currentUrl);
     const [isFocused, setIsFocused] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    // فرمت کردن آدرس برای نمایش خلوت‌تر در آدرس‌بار
     const formatUrlForDisplay = (url: string) => {
         if (!url) return "";
-        // پروتکل aster:// را دست‌نخورده باقی بگذار
         if (url.startsWith("aster://")) {
             return url;
         }
@@ -66,7 +69,6 @@ export function NavigationBar({
         const query = inputUrl.trim();
         if (!query) return;
 
-        // اگر آدرس aster:// بود، مستقیم پاس بده به onNavigate
         if (query.startsWith("aster://")) {
             onNavigate(query);
             return;
@@ -94,7 +96,6 @@ export function NavigationBar({
 
     return (
         <div className="relative flex h-11 w-full items-center gap-2 bg-slate-950 px-3 border-b border-slate-800/80 select-none">
-            {/* دکمه‌های ناوبری چپ */}
             <div className="flex items-center gap-0.5 text-slate-400">
                 <button
                     type="button"
@@ -119,7 +120,6 @@ export function NavigationBar({
                 </button>
             </div>
 
-            {/* آدرس‌بار */}
             <form onSubmit={handleSubmit} className="flex flex-1 items-center">
                 <div
                     className={`flex h-8 w-full items-center gap-2 rounded-full bg-slate-900 px-3 border transition-all duration-150 ${
@@ -145,15 +145,25 @@ export function NavigationBar({
                             setInputUrl(formatUrlForDisplay(currentUrl));
                         }}
                         onChange={(e) => setInputUrl(e.target.value)}
-                        placeholder="Search Google or type a URL (e.g. aster://history)"
+                        placeholder="Search Google or type a URL (e.g. aster://downloads)"
                         className="w-full bg-transparent text-xs text-slate-200 placeholder-slate-500 outline-none font-normal"
                     />
                 </div>
             </form>
 
-            {/* بخش سمت راست */}
             <div className="flex items-center gap-1.5">
-                {/* دکمه باز کردن سایدبار افزونه‌ها */}
+                <button
+                    type="button"
+                    onClick={onOpenDownloads}
+                    className="relative rounded-full p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-100 transition-colors"
+                    title="Downloads"
+                >
+                    <Download className="h-4 w-4" />
+                    {hasUnreadDownloads && (
+                        <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-indigo-500 animate-pulse" />
+                    )}
+                </button>
+
                 <button
                     type="button"
                     onClick={onToggleExtensionsSidebar}
@@ -167,7 +177,6 @@ export function NavigationBar({
                     <Puzzle className="h-4 w-4" />
                 </button>
 
-                {/* دکمه هوش مصنوعی */}
                 <button
                     type="button"
                     onClick={onToggleSidebar}
@@ -181,7 +190,6 @@ export function NavigationBar({
                     <span>Aster AI</span>
                 </button>
 
-                {/* دکمه منوی سه‌نقطه */}
                 <button
                     type="button"
                     onClick={onToggleMenu}

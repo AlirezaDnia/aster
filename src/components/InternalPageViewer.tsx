@@ -4,15 +4,20 @@ import { BookmarksPage } from "../pages/BookmarksPage";
 import { HistoryPage } from "../pages/HistoryPage";
 import { SettingsPage } from "../pages/SettingsPage";
 import { DownloadsPage } from "../pages/DownloadsPage";
+import { DownloadItem } from "../hooks/useDownloadManager";
 
 interface InternalPageViewerProps {
     url: string;
     onNavigate: (url: string) => void;
+    downloads?: DownloadItem[];
+    onOpenFolder?: (path?: string) => void;
 }
 
 export function InternalPageViewer({
     url,
     onNavigate,
+    downloads = [],
+    onOpenFolder,
 }: InternalPageViewerProps) {
     const pageRoute = url.replace("aster://", "").split("/")[0].toLowerCase();
 
@@ -28,7 +33,12 @@ export function InternalPageViewer({
             case "settings":
                 return <SettingsPage />;
             case "downloads":
-                return <DownloadsPage />;
+                return (
+                    <DownloadsPage
+                        downloads={downloads}
+                        onOpenFolder={onOpenFolder}
+                    />
+                );
             default:
                 return (
                     <div className="flex flex-col items-center justify-center h-full text-slate-400">

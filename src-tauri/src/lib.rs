@@ -1,6 +1,6 @@
 use serde::Serialize;
 use tauri::{
-    webview::{NewWindowResponse, PageLoadEvent},
+    webview::{DownloadEvent, NewWindowResponse, PageLoadEvent},
     AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Url, WebviewBuilder, WebviewUrl,
 };
 
@@ -30,10 +30,8 @@ async fn create_or_show_tab_webview(
 
     let is_internal_page = url.starts_with("aster://") || url.is_empty() || url == "about:blank";
 
-    // ۱. اگر وب‌ویو نیتیو از قبل وجود دارد
     if let Some(webview) = app.get_webview(&label) {
         if is_internal_page {
-            // برای صفحات داخلی، وب‌ویو نیتیو را مخفی می‌کنیم تا UI اصلی (React) دیده شود
             let _ = webview.hide();
         } else {
             let _ = webview.set_position(pos);
@@ -54,26 +52,21 @@ async fn create_or_show_tab_webview(
             let _ = webview.set_focus();
         }
 
-        // مخفی‌سازی سایر تب‌ها
         for (name, other_webview) in app.webviews() {
             if name.starts_with("tab_") && name != label {
                 let _ = other_webview.hide();
             }
         }
-    }
-    // ۲. اگر وب‌ویو وجود ندارد و آدرس یک وب‌سایت واقعی (غیر داخلی) است
-    else if !is_internal_page {
+    } else if !is_internal_page {
         let parsed_url = Url::parse(&url).map_err(|e| e.to_string())?;
         let app_handle = app.clone();
         let app_handle_new = app.clone();
+        let app_handle_download = app.clone();
 
-        // اسکریپت اکستنشن‌های داخلی پیش‌فرض (RTL هوشمند و فونت فارسی)
         let builtin_extensions_script = r#"
             (function() {
                 function applyBuiltinExtensions() {
                     const host = window.location.hostname;
-
-                    // اکستنشن ۱: اصلاح جهت متن RTL برای ChatGPT و سیستم‌های هوش مصنوعی
                     const isAIAssistant = host.includes("chatgpt.com") || host.includes("openai.com") || host.includes("claude.ai");
                     if (isAIAssistant && !document.getElementById("builtin-ext-rtl")) {
                         const style = document.createElement("style");
@@ -87,7 +80,6 @@ async fn create_or_show_tab_webview(
                         document.head.appendChild(style);
                     }
 
-                    // اکستنشن ۲: تزریق فونت فارسی استاندارد (Vazirmatn) برای خوانایی بهتر
                     if (!document.getElementById("builtin-ext-farsi-font")) {
                         const fontStyle = document.createElement("style");
                         fontStyle.id = "builtin-ext-farsi-font";
@@ -162,6 +154,51 @@ async fn create_or_show_tab_webview(
             .on_new_window(move |url, _| {
                 let _ = app_handle_new.emit("open-new-tab", url.as_str());
                 NewWindowResponse::Deny
+            })
+            .on_download(move |_webview, event| {
+                let app = app_handle_download.clone();
+                match event {
+                    DownloadEvent::Requested { url, destination } => {
+                        let file_name = destination
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("download")
+                            .to_string();
+
+                        let _ = app.emit(
+                            "download-progress",
+                            serde_json::json!({
+                                "id": url.as_str(),
+                                "file_name": file_name,
+                                "downloaded_bytes": 0,
+                                "total_bytes": 0,
+                                "state": "downloading"
+                            }),
+                        );
+                        true
+                    }
+                    DownloadEvent::Finished { url, path, success } => {
+                        let path_str = path.as_ref().map(|p| p.to_string_lossy().to_string());
+                        let file_name = path
+                            .as_ref()
+                            .and_then(|p| p.file_name())
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("download")
+                            .to_string();
+
+                        let _ = app.emit(
+                            "download-finished",
+                            serde_json::json!({
+                                "id": url.as_str(),
+                                "file_name": file_name,
+                                "state": if success { "completed" } else { "failed" },
+                                "path": path_str
+                            }),
+                        );
+                        true
+                    }
+                    _ => true,
+                }
             });
 
         let webview = main_window
@@ -177,7 +214,6 @@ async fn create_or_show_tab_webview(
             }
         }
     } else {
-        // برای صفحات aster:// مخفی‌سازی بقیه وب‌ویوها کافی است
         for (name, other_webview) in app.webviews() {
             if name.starts_with("tab_") {
                 let _ = other_webview.hide();
@@ -185,6 +221,62 @@ async fn create_or_show_tab_webview(
         }
     }
 
+    Ok(())
+}
+
+#[tauri::command]
+async fn pause_download(app: AppHandle, id: String) -> Result<(), String> {
+    let _ = app.emit(
+        "download-state-changed",
+        serde_json::json!({ "id": id, "state": "paused" }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+async fn resume_download(app: AppHandle, id: String) -> Result<(), String> {
+    let _ = app.emit(
+        "download-state-changed",
+        serde_json::json!({ "id": id, "state": "downloading" }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+async fn cancel_download(app: AppHandle, id: String) -> Result<(), String> {
+    let _ = app.emit(
+        "download-finished",
+        serde_json::json!({ "id": id, "state": "cancelled" }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+async fn show_in_folder(path: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .args(["/select,", &path])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .args(["-R", &path])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let path_obj = std::path::Path::new(&path);
+        if let Some(parent) = path_obj.parent() {
+            std::process::Command::new("xdg-open")
+                .arg(parent)
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        }
+    }
     Ok(())
 }
 
@@ -258,6 +350,10 @@ pub fn run() {
             webview_reload,
             set_webview_zoom,
             eval_webview_script,
+            show_in_folder,
+            pause_download,
+            resume_download,
+            cancel_download,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

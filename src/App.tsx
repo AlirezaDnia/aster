@@ -11,10 +11,8 @@ import { InternalPageViewer } from "./components/InternalPageViewer";
 import { useTabManager } from "./hooks/useTabManager";
 import { useWebviewBounds } from "./hooks/useWebviewBounds";
 import { useAISettings } from "./hooks/useAISettings";
+import { useDownloadManager } from "./hooks/useDownloadManager";
 
-// ----------------------------------------------------------------------
-// Types
-// ----------------------------------------------------------------------
 export interface ExtensionStates {
     rtl: boolean;
     vazir: boolean;
@@ -27,9 +25,6 @@ const DEFAULT_EXTENSION_STATES: ExtensionStates = {
     dark: false,
 };
 
-// ----------------------------------------------------------------------
-// Pure Native Injection Script Generator
-// ----------------------------------------------------------------------
 function buildScript(states: ExtensionStates): string {
     const isRtl = Boolean(states.rtl);
     const isVazir = Boolean(states.vazir);
@@ -40,7 +35,6 @@ function buildScript(states: ExtensionStates): string {
     try {
         const docHead = document.head || document.documentElement;
 
-        // 1. RTL / Direction Extension
         const rtlId = '__ext_rtl_style__';
         let rtlEl = document.getElementById(rtlId);
         if (${isRtl}) {
@@ -57,15 +51,12 @@ function buildScript(states: ExtensionStates): string {
                 document.documentElement.setAttribute('dir', 'rtl');
             }
         } else {
-            if (rtlEl) {
-                rtlEl.remove();
-            }
+            if (rtlEl) rtlEl.remove();
             if (document.documentElement.getAttribute('dir') === 'rtl') {
                 document.documentElement.removeAttribute('dir');
             }
         }
 
-        // 2. Vazir Font Extension
         const vazirId = '__ext_vazir_style__';
         let vazirEl = document.getElementById(vazirId);
         if (${isVazir}) {
@@ -81,12 +72,9 @@ function buildScript(states: ExtensionStates): string {
                 docHead.appendChild(vazirEl);
             }
         } else {
-            if (vazirEl) {
-                vazirEl.remove();
-            }
+            if (vazirEl) vazirEl.remove();
         }
 
-        // 3. Dark Mode Extension (Isolated from direction)
         const darkId = '__ext_dark_style__';
         let darkEl = document.getElementById(darkId);
         if (${isDark}) {
@@ -105,9 +93,7 @@ function buildScript(states: ExtensionStates): string {
                 docHead.appendChild(darkEl);
             }
         } else {
-            if (darkEl) {
-                darkEl.remove();
-            }
+            if (darkEl) darkEl.remove();
         }
     } catch (err) {
         console.error('[Extension System] Injection error:', err);
@@ -116,9 +102,6 @@ function buildScript(states: ExtensionStates): string {
     `;
 }
 
-// ----------------------------------------------------------------------
-// Main Application
-// ----------------------------------------------------------------------
 export function App() {
     const {
         tabs,
@@ -132,18 +115,17 @@ export function App() {
     } = useTabManager();
 
     const { aiSettings, setAiSettings } = useAISettings();
+    const { downloads, hasUnread, markAsRead, openInFolder } =
+        useDownloadManager();
 
-    // Sidebars State
     const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
     const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
     const [isExtensionsOpen, setIsExtensionsOpen] = useState<boolean>(false);
 
-    // Extensions Map per Tab
     const [extensionsMap, setExtensionsMap] = useState<
         Record<string, ExtensionStates>
     >({});
 
-    // متد تزریق اسکریپت اکستنشن به وب‌ویو
     const applyExtensionScript = useCallback(
         (tabId: string, states: ExtensionStates) => {
             if (!tabId) return;
@@ -162,7 +144,6 @@ export function App() {
         [],
     );
 
-    // مدیریت آپدیت وضعیت اکستنشن
     const handleUpdateExtension = useCallback(
         (tabId: string, key: keyof ExtensionStates, value: boolean) => {
             if (!tabId) return;
@@ -179,7 +160,6 @@ export function App() {
         [applyExtensionScript],
     );
 
-    // با تغییر URL یا رفرش صفحه، استیت اکستنشن‌های آن تب به حالت اولیه (غیرفعال) بازنشانی می‌شود
     useEffect(() => {
         if (!activeTabId) return;
 
@@ -189,7 +169,6 @@ export function App() {
         }));
     }, [activeTabId, activeTab?.url]);
 
-    // محاسبه اندازه نیتیو وب‌ویو با هوک
     const { viewportRef } = useWebviewBounds(
         activeTabId,
         activeTab?.url,
@@ -198,7 +177,6 @@ export function App() {
         isExtensionsOpen,
     );
 
-    // شنونده باز شدن تب جدید از سمت Tauri
     useEffect(() => {
         const unlistenPromise = listen<string>("open-new-tab", (event) => {
             if (event.payload) {
@@ -217,7 +195,6 @@ export function App() {
 
     return (
         <div className="flex h-screen w-screen flex-col bg-slate-950 text-slate-100 overflow-hidden select-none">
-            {/* TabBar & NavigationBar */}
             <header className="flex flex-col z-10">
                 <TabBar
                     tabs={tabs}
@@ -266,26 +243,30 @@ export function App() {
                         if (isExtensionsOpen) setIsExtensionsOpen(false);
                     }}
                     isMenuOpen={isMenuOpen}
+                    hasUnreadDownloads={hasUnread}
+                    onOpenDownloads={() => {
+                        markAsRead();
+                        handleNavigate("aster://downloads");
+                    }}
                 />
             </header>
 
-            {/* Viewport Area */}
             <div className="flex flex-1 overflow-hidden relative">
                 <main
                     ref={viewportRef}
                     className="flex-1 bg-slate-950 flex items-center justify-center overflow-hidden"
                 >
-                    {/* ۱. نمایش صفحات داخلی مرورگر با پروتکل aster:// */}
                     {isInternalPage && activeTabId && (
                         <InternalPageViewer
                             url={activeUrl}
                             onNavigate={(targetUrl) =>
                                 handleNavigate(targetUrl)
                             }
+                            downloads={downloads}
+                            onOpenFolder={openInFolder}
                         />
                     )}
 
-                    {/* ۲. نمایش صفحه شروع در صورت خالی بودن URL */}
                     {isBlankPage && (
                         <StartPage
                             onSearch={(query) => handleNavigate(query)}
@@ -293,7 +274,6 @@ export function App() {
                     )}
                 </main>
 
-                {/* Sidebars */}
                 {isMenuOpen && (
                     <MenuSidebar
                         onClose={() => setIsMenuOpen(false)}
