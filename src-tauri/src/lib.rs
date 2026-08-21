@@ -28,26 +28,31 @@ async fn create_or_show_tab_webview(
     let pos = LogicalPosition::new(x, y);
     let size = LogicalSize::new(width, height);
 
-    // ۱. اگر وب‌ویو از قبل وجود دارد: تنظیم ابعاد و در صورت نیاز تغییر آدرس
-    if let Some(webview) = app.get_webview(&label) {
-        let _ = webview.set_position(pos);
-        let _ = webview.set_size(size);
+    let is_internal_page = url.starts_with("aster://") || url.is_empty() || url == "about:blank";
 
-        if !url.is_empty() && url != "about:blank" {
+    // ۱. اگر وب‌ویو نیتیو از قبل وجود دارد
+    if let Some(webview) = app.get_webview(&label) {
+        if is_internal_page {
+            // برای صفحات داخلی، وب‌ویو نیتیو را مخفی می‌کنیم تا UI اصلی (React) دیده شود
+            let _ = webview.hide();
+        } else {
+            let _ = webview.set_position(pos);
+            let _ = webview.set_size(size);
+
             if let Ok(current_url) = webview.url() {
                 let current_str = current_url.as_str().trim_end_matches('/');
                 let target_str = url.trim_end_matches('/');
 
-                if current_str != target_str && !target_str.is_empty() {
+                if current_str != target_str {
                     if let Ok(parsed_url) = Url::parse(&url) {
                         let _ = webview.navigate(parsed_url);
                     }
                 }
             }
-        }
 
-        let _ = webview.show();
-        let _ = webview.set_focus();
+            let _ = webview.show();
+            let _ = webview.set_focus();
+        }
 
         // مخفی‌سازی سایر تب‌ها
         for (name, other_webview) in app.webviews() {
@@ -56,8 +61,8 @@ async fn create_or_show_tab_webview(
             }
         }
     }
-    // ۲. اگر وب‌ویو وجود ندارد: ساخت تب جدید
-    else if !url.is_empty() && url != "about:blank" {
+    // ۲. اگر وب‌ویو وجود ندارد و آدرس یک وب‌سایت واقعی (غیر داخلی) است
+    else if !is_internal_page {
         let parsed_url = Url::parse(&url).map_err(|e| e.to_string())?;
         let app_handle = app.clone();
         let app_handle_new = app.clone();
@@ -171,6 +176,13 @@ async fn create_or_show_tab_webview(
                 let _ = other_webview.hide();
             }
         }
+    } else {
+        // برای صفحات aster:// مخفی‌سازی بقیه وب‌ویوها کافی است
+        for (name, other_webview) in app.webviews() {
+            if name.starts_with("tab_") {
+                let _ = other_webview.hide();
+            }
+        }
     }
 
     Ok(())
@@ -225,7 +237,6 @@ async fn set_webview_zoom(app: AppHandle, label: String, factor: f64) -> Result<
     Ok(())
 }
 
-// دستور جدید برای اجرای اسکریپت اکستنشن‌های دستی از سمت UI (React)
 #[tauri::command]
 async fn eval_webview_script(app: AppHandle, label: String, script: String) -> Result<(), String> {
     if let Some(webview) = app.get_webview(&label) {

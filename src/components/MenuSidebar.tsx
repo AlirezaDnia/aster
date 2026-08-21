@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
     Plus,
     RotateCw,
@@ -15,37 +15,124 @@ import {
     X,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 interface MenuSidebarProps {
     onClose: () => void;
-    onNewTab: () => void;
+    onNewTab: (url?: string) => void;
     activeTabId: string | null;
+    activeTabUrl?: string;
 }
 
 export function MenuSidebar({
     onClose,
     onNewTab,
     activeTabId,
+    activeTabUrl = "",
 }: MenuSidebarProps) {
     const [zoomLevel, setZoomLevel] = useState<number>(100);
     const [isBookmarked, setIsBookmarked] = useState<boolean>(false);
 
+    // بررسی وضعیت بوک‌مارک بودن URL جاری
+    useEffect(() => {
+        if (!activeTabUrl) return;
+        try {
+            const savedBookmarks = JSON.parse(
+                localStorage.getItem("browser_bookmarks") || "[]",
+            );
+            const exists = savedBookmarks.some(
+                (item: { url: string }) => item.url === activeTabUrl,
+            );
+            setIsBookmarked(exists);
+        } catch {
+            setIsBookmarked(false);
+        }
+    }, [activeTabUrl]);
+
+    // ۱. ریفریش تب جاری
     const handleReload = () => {
         if (activeTabId) {
-            invoke("webview_reload", { label: `tab_${activeTabId}` });
+            invoke("webview_reload", { label: `tab_${activeTabId}` }).catch(
+                console.error,
+            );
         }
+        onClose();
     };
 
+    // ۲. مدیریت زوم وب‌ویو با تزریق اسکریپت
     const handleZoomChange = (delta: number) => {
         setZoomLevel((prev) => {
-            const newZoom = Math.min(Math.max(prev + delta, 25), 500);
-            // در صورت نیاز فراخوانی متد زوم نیتیو
+            const newZoom = Math.min(Math.max(prev + delta, 30), 300);
+            if (activeTabId) {
+                const zoomFactor = newZoom / 100;
+                const script = `document.body.style.zoom = '${zoomFactor}';`;
+                invoke("eval_webview_script", {
+                    label: `tab_${activeTabId}`,
+                    script,
+                }).catch(console.error);
+            }
             return newZoom;
         });
     };
 
+    // ۳. حالت تمام‌صفحه (Fullscreen)
+    const handleToggleFullscreen = async () => {
+        try {
+            const appWindow = getCurrentWindow();
+            const isFull = await appWindow.isFullscreen();
+            await appWindow.setFullscreen(!isFull);
+        } catch (err) {
+            console.error("Failed to toggle fullscreen:", err);
+        }
+        onClose();
+    };
+
+    // ۴. افزودن/حذف بوک‌مارک
+    const handleToggleBookmark = () => {
+        if (!activeTabUrl || activeTabUrl === "about:blank") return;
+
+        try {
+            const savedBookmarks = JSON.parse(
+                localStorage.getItem("browser_bookmarks") || "[]",
+            );
+
+            if (isBookmarked) {
+                const updated = savedBookmarks.filter(
+                    (item: { url: string }) => item.url !== activeTabUrl,
+                );
+                localStorage.setItem(
+                    "browser_bookmarks",
+                    JSON.stringify(updated),
+                );
+                setIsBookmarked(false);
+            } else {
+                const updated = [
+                    ...savedBookmarks,
+                    {
+                        url: activeTabUrl,
+                        title: activeTabUrl,
+                        addedAt: new Date().toISOString(),
+                    },
+                ];
+                localStorage.setItem(
+                    "browser_bookmarks",
+                    JSON.stringify(updated),
+                );
+                setIsBookmarked(true);
+            }
+        } catch (err) {
+            console.error("Bookmark operation failed:", err);
+        }
+    };
+
+    // ۵. باز کردن صفحات داخلی مرورگر با پروتکل aster://
+    const handleOpenInternalPage = (internalUrl: string) => {
+        onNewTab(internalUrl);
+        onClose();
+    };
+
     return (
-        <aside className="w-80 h-full bg-slate-900 border-l border-slate-800 flex flex-col p-3 text-xs select-none justify-between">
+        <aside className="w-80 h-full bg-slate-900 border-l border-slate-800 flex flex-col p-3 text-xs select-none justify-between z-20">
             <div className="flex flex-col gap-2 overflow-y-auto">
                 {/* سربرگ سایدبار */}
                 <div className="flex items-center justify-between pb-2 border-b border-slate-800">
@@ -60,7 +147,7 @@ export function MenuSidebar({
                     </button>
                 </div>
 
-                {/* هشدار امنیت رمزمشابه کروم */}
+                {/* هشدار امنیت رمز */}
                 <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300">
                     <ShieldAlert className="h-4 w-4 shrink-0" />
                     <span className="text-[11px] font-medium">
@@ -71,7 +158,7 @@ export function MenuSidebar({
                 {/* اکشن‌های اصلی */}
                 <button
                     onClick={() => {
-                        onNewTab();
+                        onNewTab("aster://newtab");
                         onClose();
                     }}
                     className="flex items-center justify-between rounded-xl px-3 py-2 hover:bg-slate-800 text-slate-200 transition-colors"
@@ -111,9 +198,9 @@ export function MenuSidebar({
 
                 <div className="h-px bg-slate-800 my-1" />
 
-                {/* قابلیت افزودن بوک‌مارک */}
+                {/* افزودن بوک‌مارک */}
                 <button
-                    onClick={() => setIsBookmarked((prev) => !prev)}
+                    onClick={handleToggleBookmark}
                     className="flex items-center justify-between rounded-xl px-3 py-2 hover:bg-slate-800 text-slate-200 transition-colors"
                 >
                     <span className="flex items-center gap-2.5">
@@ -129,7 +216,10 @@ export function MenuSidebar({
                     <span className="text-[10px] text-slate-500">Ctrl+D</span>
                 </button>
 
-                <button className="flex items-center justify-between rounded-xl px-3 py-2 hover:bg-slate-800 text-slate-200 transition-colors">
+                <button
+                    onClick={() => handleOpenInternalPage("aster://bookmarks")}
+                    className="flex items-center justify-between rounded-xl px-3 py-2 hover:bg-slate-800 text-slate-200 transition-colors"
+                >
                     <span className="flex items-center gap-2.5">
                         <Bookmark className="h-4 w-4 text-slate-400" />{" "}
                         Bookmarks & lists
@@ -139,7 +229,7 @@ export function MenuSidebar({
 
                 <div className="h-px bg-slate-800 my-1" />
 
-                {/* کنترل زوم */}
+                {/* کنترل زوم و فول‌اسکرین */}
                 <div className="flex items-center justify-between px-3 py-1.5 hover:bg-slate-800 rounded-xl transition-colors">
                     <span className="flex items-center gap-2.5 text-slate-200">
                         <ZoomIn className="h-4 w-4 text-slate-400" /> Zoom
@@ -148,6 +238,7 @@ export function MenuSidebar({
                         <button
                             onClick={() => handleZoomChange(-10)}
                             className="text-slate-400 hover:text-white transition-colors"
+                            title="Zoom Out"
                         >
                             <ZoomOut className="h-3.5 w-3.5" />
                         </button>
@@ -157,10 +248,15 @@ export function MenuSidebar({
                         <button
                             onClick={() => handleZoomChange(10)}
                             className="text-slate-400 hover:text-white transition-colors"
+                            title="Zoom In"
                         >
                             <ZoomIn className="h-3.5 w-3.5" />
                         </button>
-                        <button className="ml-1 text-slate-400 hover:text-white transition-colors border-l border-slate-800 pl-1.5">
+                        <button
+                            onClick={handleToggleFullscreen}
+                            className="ml-1 text-slate-400 hover:text-white transition-colors border-l border-slate-800 pl-1.5"
+                            title="Toggle Fullscreen"
+                        >
                             <Maximize className="h-3.5 w-3.5" />
                         </button>
                     </div>
@@ -168,14 +264,21 @@ export function MenuSidebar({
 
                 <div className="h-px bg-slate-800 my-1" />
 
-                <button className="flex items-center justify-between rounded-xl px-3 py-2 hover:bg-slate-800 text-slate-200 transition-colors">
+                {/* تاریخچه، دانلودها و تنظیمات با لینک‌های aster:// */}
+                <button
+                    onClick={() => handleOpenInternalPage("aster://history")}
+                    className="flex items-center justify-between rounded-xl px-3 py-2 hover:bg-slate-800 text-slate-200 transition-colors"
+                >
                     <span className="flex items-center gap-2.5">
                         <History className="h-4 w-4 text-slate-400" /> History
                     </span>
                     <span className="text-[10px] text-slate-500">Ctrl+H</span>
                 </button>
 
-                <button className="flex items-center justify-between rounded-xl px-3 py-2 hover:bg-slate-800 text-slate-200 transition-colors">
+                <button
+                    onClick={() => handleOpenInternalPage("aster://downloads")}
+                    className="flex items-center justify-between rounded-xl px-3 py-2 hover:bg-slate-800 text-slate-200 transition-colors"
+                >
                     <span className="flex items-center gap-2.5">
                         <Download className="h-4 w-4 text-slate-400" />{" "}
                         Downloads
@@ -183,7 +286,10 @@ export function MenuSidebar({
                     <span className="text-[10px] text-slate-500">Ctrl+J</span>
                 </button>
 
-                <button className="flex items-center justify-between rounded-xl px-3 py-2 hover:bg-slate-800 text-slate-200 transition-colors">
+                <button
+                    onClick={() => handleOpenInternalPage("aster://settings")}
+                    className="flex items-center justify-between rounded-xl px-3 py-2 hover:bg-slate-800 text-slate-200 transition-colors"
+                >
                     <span className="flex items-center gap-2.5">
                         <Settings className="h-4 w-4 text-slate-400" /> Settings
                     </span>

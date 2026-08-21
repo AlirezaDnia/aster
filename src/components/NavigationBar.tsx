@@ -19,8 +19,8 @@ interface NavigationBarProps {
     onReload: () => void;
     onToggleSidebar: () => void;
     isSidebarOpen: boolean;
-    onToggleExtensionsSidebar: () => void; // 👈 کنترل سایدبار اکستنشن‌ها
-    isExtensionsOpen: boolean; // 👈 استیت سایدبار اکستنشن‌ها
+    onToggleExtensionsSidebar: () => void;
+    isExtensionsOpen: boolean;
     onToggleMenu: () => void;
     isMenuOpen: boolean;
 }
@@ -44,8 +44,13 @@ export function NavigationBar({
     const [isFocused, setIsFocused] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
 
+    // فرمت کردن آدرس برای نمایش خلوت‌تر در آدرس‌بار
     const formatUrlForDisplay = (url: string) => {
         if (!url) return "";
+        // پروتکل aster:// را دست‌نخورده باقی بگذار
+        if (url.startsWith("aster://")) {
+            return url;
+        }
         return url.replace(/^https?:\/\//i, "");
     };
 
@@ -60,6 +65,12 @@ export function NavigationBar({
         inputRef.current?.blur();
         const query = inputUrl.trim();
         if (!query) return;
+
+        // اگر آدرس aster:// بود، مستقیم پاس بده به onNavigate
+        if (query.startsWith("aster://")) {
+            onNavigate(query);
+            return;
+        }
 
         let targetUrl = query;
         const isUrlPattern =
@@ -134,7 +145,7 @@ export function NavigationBar({
                             setInputUrl(formatUrlForDisplay(currentUrl));
                         }}
                         onChange={(e) => setInputUrl(e.target.value)}
-                        placeholder="Search Google or type a URL"
+                        placeholder="Search Google or type a URL (e.g. aster://history)"
                         className="w-full bg-transparent text-xs text-slate-200 placeholder-slate-500 outline-none font-normal"
                     />
                 </div>

@@ -11,6 +11,35 @@ interface TabStatePayload {
     isLoading?: boolean;
 }
 
+// تابع کمکی برای تشخیص و فرمت‌دهی URLهای ورودی
+function parseInputUrl(input: string): string {
+    const trimmed = input.trim();
+    if (!trimmed) return "";
+
+    // ۱. پشتیبانی از آدرس‌های اختصاصی آستر (Internal Pages)
+    if (trimmed.startsWith("aster://")) {
+        return trimmed;
+    }
+
+    // ۲. آدرس‌های دارای پروتکل استاندارد
+    if (
+        /^https?:\/\//i.test(trimmed) ||
+        trimmed.startsWith("about:") ||
+        trimmed.startsWith("file://")
+    ) {
+        return trimmed;
+    }
+
+    // ۳. دامنه‌های بدون پروتکل (مثل google.com)
+    const isDomain = trimmed.includes(".") && !trimmed.includes(" ");
+    if (isDomain) {
+        return `https://${trimmed}`;
+    }
+
+    // ۴. عبارات جستجو -> گوگل
+    return `https://www.google.com/search?q=${encodeURIComponent(trimmed)}`;
+}
+
 export function useTabManager() {
     const [tabs, setTabs] = useState<Tab[]>([
         { id: "1", title: "New Tab", url: "", isLoading: false },
@@ -19,7 +48,6 @@ export function useTabManager() {
 
     const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
-    // دریافت مستقیم event و بروزرسانی هوشمند State بدون Rerender اضافه
     useEffect(() => {
         const unlistenPromise = listen<TabStatePayload>(
             "tab-state-changed",
@@ -69,9 +97,12 @@ export function useTabManager() {
     const handleSelectTab = useCallback(
         (id: string) => {
             const targetTab = tabs.find((t) => t.id === id);
+            // اگر تب آدرس داخلی یا خالی داشت، وب‌ویو نیتیو را مخفی کن
             if (
                 targetTab &&
-                (!targetTab.url || targetTab.url === "about:blank")
+                (!targetTab.url ||
+                    targetTab.url === "about:blank" ||
+                    targetTab.url.startsWith("aster://"))
             ) {
                 invoke("hide_tab_webview", {
                     label: `tab_${activeTabId}`,
@@ -91,20 +122,25 @@ export function useTabManager() {
             }
 
             const newId = Date.now().toString();
+            const formattedUrl = parseInputUrl(initialUrl);
 
-            let formattedUrl = initialUrl.trim();
-            if (formattedUrl && !/^https?:\/\//i.test(formattedUrl)) {
-                formattedUrl =
-                    formattedUrl.includes(".") && !formattedUrl.includes(" ")
-                        ? `https://${formattedUrl}`
-                        : `https://www.google.com/search?q=${encodeURIComponent(formattedUrl)}`;
+            // محاسبه عنوان اولیه تب
+            let initialTitle = "New Tab";
+            if (formattedUrl.startsWith("aster://")) {
+                const pageName = formattedUrl.replace("aster://", "");
+                initialTitle =
+                    pageName.charAt(0).toUpperCase() + pageName.slice(1);
+            } else if (formattedUrl) {
+                initialTitle = "Loading...";
             }
 
             const newTab: Tab = {
                 id: newId,
-                title: formattedUrl ? "Loading..." : "New Tab",
+                title: initialTitle,
                 url: formattedUrl,
-                isLoading: Boolean(formattedUrl),
+                isLoading:
+                    Boolean(formattedUrl) &&
+                    !formattedUrl.startsWith("aster://"),
             };
 
             setTabs((prev) => [...prev, newTab]);
@@ -137,24 +173,34 @@ export function useTabManager() {
 
     const handleNavigate = useCallback(
         (input: string) => {
-            let targetUrl = input.trim();
+            const targetUrl = parseInputUrl(input);
             if (!targetUrl) return;
 
-            if (!/^https?:\/\//i.test(targetUrl)) {
-                targetUrl =
-                    targetUrl.includes(".") && !targetUrl.includes(" ")
-                        ? `https://${targetUrl}`
-                        : `https://www.google.com/search?q=${encodeURIComponent(targetUrl)}`;
+            const isInternal = targetUrl.startsWith("aster://");
+
+            // اگر به صفحه داخلی انتقال می‌یابیم، وب‌ویوی فعلی Rust را مخفی می‌کنیم
+            if (isInternal) {
+                invoke("hide_tab_webview", {
+                    label: `tab_${activeTabId}`,
+                }).catch(() => {});
             }
 
             setTabs((prev) =>
                 prev.map((tab) => {
                     if (tab.id === activeTabId) {
+                        let title = "Loading...";
+                        if (isInternal) {
+                            const pageName = targetUrl.replace("aster://", "");
+                            title =
+                                pageName.charAt(0).toUpperCase() +
+                                pageName.slice(1);
+                        }
+
                         return {
                             ...tab,
                             url: targetUrl,
-                            title: "Loading...",
-                            isLoading: true,
+                            title: title,
+                            isLoading: !isInternal, // برای صفحات داخلی نیازی به حالت Loading لایو نیست
                         };
                     }
                     return tab;

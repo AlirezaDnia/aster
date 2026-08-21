@@ -6,7 +6,8 @@ import { NavigationBar } from "./components/NavigationBar";
 import { AIPanel } from "./components/AIPanel";
 import { MenuSidebar } from "./components/MenuSidebar";
 import { ExtensionsPanel } from "./components/ExtensionsPanel";
-import { StartPage } from "./components/StartPage";
+import { StartPage } from "./pages/StartPage";
+import { InternalPageViewer } from "./components/InternalPageViewer";
 import { useTabManager } from "./hooks/useTabManager";
 import { useWebviewBounds } from "./hooks/useWebviewBounds";
 import { useAISettings } from "./hooks/useAISettings";
@@ -210,6 +211,10 @@ export function App() {
         };
     }, [handleNewTab]);
 
+    const activeUrl = activeTab?.url || "";
+    const isInternalPage = activeUrl.startsWith("aster://");
+    const isBlankPage = !activeUrl || activeUrl === "about:blank";
+
     return (
         <div className="flex h-screen w-screen flex-col bg-slate-950 text-slate-100 overflow-hidden select-none">
             {/* TabBar & NavigationBar */}
@@ -219,14 +224,14 @@ export function App() {
                     activeTabId={activeTabId}
                     onSelectTab={handleSelectTab}
                     onCloseTab={handleCloseTab}
-                    onNewTab={() => handleNewTab("")}
+                    onNewTab={() => handleNewTab("aster://newtab")}
                     onReorderTabs={reorderTabs}
                 />
 
                 <NavigationBar
-                    currentUrl={activeTab?.url || ""}
+                    currentUrl={activeUrl}
                     activeTabId={activeTabId}
-                    onNewTab={() => handleNewTab("")}
+                    onNewTab={() => handleNewTab("aster://newtab")}
                     onNavigate={handleNavigate}
                     onGoBack={() =>
                         invoke("webview_go_back", {
@@ -268,10 +273,23 @@ export function App() {
             <div className="flex flex-1 overflow-hidden relative">
                 <main
                     ref={viewportRef}
-                    className="flex-1 bg-slate-900 flex items-center justify-center overflow-hidden"
+                    className="flex-1 bg-slate-950 flex items-center justify-center overflow-hidden"
                 >
-                    {(!activeTab?.url || activeTab.url === "about:blank") && (
-                        <StartPage onSearch={handleNavigate} />
+                    {/* ۱. نمایش صفحات داخلی مرورگر با پروتکل aster:// */}
+                    {isInternalPage && activeTabId && (
+                        <InternalPageViewer
+                            url={activeUrl}
+                            onNavigate={(targetUrl) =>
+                                handleNavigate(targetUrl)
+                            }
+                        />
+                    )}
+
+                    {/* ۲. نمایش صفحه شروع در صورت خالی بودن URL */}
+                    {isBlankPage && (
+                        <StartPage
+                            onSearch={(query) => handleNavigate(query)}
+                        />
                     )}
                 </main>
 
@@ -279,8 +297,11 @@ export function App() {
                 {isMenuOpen && (
                     <MenuSidebar
                         onClose={() => setIsMenuOpen(false)}
-                        onNewTab={() => handleNewTab("")}
+                        onNewTab={(url) =>
+                            handleNewTab(url || "aster://newtab")
+                        }
                         activeTabId={activeTabId}
+                        activeTabUrl={activeTab?.url}
                     />
                 )}
 
