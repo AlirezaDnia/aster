@@ -49,40 +49,51 @@ export function useTabManager() {
     const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
     useEffect(() => {
-        const unlistenPromise = listen<TabStatePayload>(
-            "tab-state-changed",
+        // ۱. مدیریت وضعیت لودینگ و تغییرات URL
+        const unlistenState = listen<any>("tab-state-changed", (event) => {
+            const payload = event.payload;
+            if (!payload) return;
+
+            const tabId = payload.label.replace("tab_", "");
+            const isLoading = payload.is_loading;
+
+            setTabs((prev) =>
+                prev.map((tab) => {
+                    if (tab.id !== tabId) return tab;
+
+                    let title = tab.title;
+                    if (isLoading) {
+                        title = "Loading...";
+                    } else if (!title || title === "Loading...") {
+                        title = payload.domain || "New Tab";
+                    }
+
+                    return {
+                        ...tab,
+                        url: payload.url || tab.url,
+                        favicon: payload.favicon || tab.favicon,
+                        isLoading: isLoading,
+                        title: title,
+                    };
+                }),
+            );
+        });
+
+        // ۲. مدیریت عنوان واقعی صفحه از متد نیتیو Tauri
+        const unlistenTitle = listen<{ label: string; title: string }>(
+            "tab-title-updated",
             (event) => {
-                const { label, url, title, favicon, isLoading } = event.payload;
-                const tabId = label.replace("tab_", "");
+                const payload = event.payload;
+                if (!payload || !payload.title) return;
+
+                const tabId = payload.label.replace("tab_", "");
 
                 setTabs((prev) =>
                     prev.map((tab) => {
                         if (tab.id !== tabId) return tab;
-
-                        const updatedTitle =
-                            title && title.trim() !== "" ? title : tab.title;
-                        const updatedFavicon = favicon || tab.favicon;
-                        const updatedUrl = url || tab.url;
-                        const updatedLoading =
-                            typeof isLoading === "boolean"
-                                ? isLoading
-                                : tab.isLoading;
-
-                        if (
-                            tab.title === updatedTitle &&
-                            tab.favicon === updatedFavicon &&
-                            tab.url === updatedUrl &&
-                            tab.isLoading === updatedLoading
-                        ) {
-                            return tab;
-                        }
-
                         return {
                             ...tab,
-                            title: updatedTitle,
-                            favicon: updatedFavicon,
-                            url: updatedUrl,
-                            isLoading: updatedLoading,
+                            title: payload.title,
                         };
                     }),
                 );
@@ -90,7 +101,8 @@ export function useTabManager() {
         );
 
         return () => {
-            unlistenPromise.then((fn) => fn());
+            unlistenState.then((fn) => fn());
+            unlistenTitle.then((fn) => fn());
         };
     }, []);
 

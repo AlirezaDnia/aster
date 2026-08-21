@@ -1,10 +1,23 @@
-use crate::models::payloads::TabStatePayload;
 use crate::services::download::execute_download;
 use crate::state::DownloadState;
 use tauri::{
     webview::{DownloadEvent, NewWindowResponse, PageLoadEvent},
     AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Url, WebviewBuilder, WebviewUrl,
 };
+
+#[tauri::command]
+pub fn update_tab_title(app: tauri::AppHandle, window: tauri::WebviewWindow, title: String) {
+    let clean_title = title.trim();
+    if !clean_title.is_empty() {
+        let _ = app.emit(
+            "tab-title-updated",
+            serde_json::json!({
+                "label": window.label(),
+                "title": clean_title
+            }),
+        );
+    }
+}
 
 #[tauri::command]
 pub async fn create_or_show_tab_webview(
@@ -53,6 +66,7 @@ pub async fn create_or_show_tab_webview(
     } else if !is_internal_page {
         let parsed_url = Url::parse(&url).map_err(|e| e.to_string())?;
         let app_handle = app.clone();
+        let app_handle_title = app.clone();
         let app_handle_new = app.clone();
         let download_state = state.inner().clone();
 
@@ -86,14 +100,35 @@ pub async fn create_or_show_tab_webview(
                     }
                 }
 
-                window.addEventListener('DOMContentLoaded', applyBuiltinExtensions);
-                const observer = new MutationObserver(applyBuiltinExtensions);
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', applyBuiltinExtensions);
+                } else {
+                    applyBuiltinExtensions();
+                }
+
+                const observer = new MutationObserver(() => {
+                    applyBuiltinExtensions();
+                });
                 observer.observe(document, { childList: true, subtree: true });
             })();
         "#;
 
         let builder = WebviewBuilder::new(&label, WebviewUrl::External(parsed_url))
             .initialization_script(builtin_extensions_script)
+            // مدیریت نیتیو تغییر عنوان صفحه
+            .on_document_title_changed(move |webview, new_title| {
+                let clean = new_title.trim();
+                if !clean.is_empty() {
+                    let _ = app_handle_title.emit(
+                        "tab-title-updated",
+                        serde_json::json!({
+                            "label": webview.label(),
+                            "title": clean
+                        }),
+                    );
+                }
+            })
+            // مدیریت لودینگ و اطلاعات مربوط به دامین
             .on_page_load(move |webview, payload| {
                 let app = app_handle.clone();
                 let label = webview.label().to_string();
@@ -112,34 +147,25 @@ pub async fn create_or_show_tab_webview(
                     PageLoadEvent::Started => {
                         let _ = app.emit(
                             "tab-state-changed",
-                            TabStatePayload {
-                                label: &label,
-                                url: &current_url,
-                                title: if domain.is_empty() {
-                                    "Loading..."
-                                } else {
-                                    &domain
-                                },
-                                favicon: &favicon,
-                                is_loading: true,
-                            },
+                            serde_json::json!({
+                                "label": label,
+                                "url": current_url,
+                                "favicon": favicon,
+                                "is_loading": true,
+                                "domain": domain
+                            }),
                         );
                     }
                     PageLoadEvent::Finished => {
-                        let title = if !domain.is_empty() {
-                            domain.clone()
-                        } else {
-                            "New Tab".to_string()
-                        };
                         let _ = app.emit(
                             "tab-state-changed",
-                            TabStatePayload {
-                                label: &label,
-                                url: &current_url,
-                                title: &title,
-                                favicon: &favicon,
-                                is_loading: false,
-                            },
+                            serde_json::json!({
+                                "label": label,
+                                "url": current_url,
+                                "favicon": favicon,
+                                "is_loading": false,
+                                "domain": domain
+                            }),
                         );
                     }
                 }

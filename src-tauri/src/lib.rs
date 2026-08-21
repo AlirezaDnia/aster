@@ -30,6 +30,7 @@ pub fn run() {
             cancel_download,
             pause_download,
             resume_download,
+            update_tab_title,
             webview_stop,
         ])
         .run(tauri::generate_context!())
