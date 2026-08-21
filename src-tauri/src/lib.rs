@@ -28,6 +28,8 @@ pub fn run() {
             show_in_folder,
             start_custom_download,
             cancel_download,
+            pause_download,
+            resume_download,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

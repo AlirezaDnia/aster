@@ -100,8 +100,9 @@ export function NavigationBar({
     const handleDownloadClick = () => {
         if (onOpenDownloads) {
             onOpenDownloads();
+        } else {
+            onNewTab("aster://downloads");
         }
-        onNewTab("aster://downloads");
     };
 
     return (

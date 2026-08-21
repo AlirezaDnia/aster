@@ -17,7 +17,7 @@ export function useDownloadManager() {
     const [hasUnread, setHasUnread] = useState(false);
 
     useEffect(() => {
-        // 1. شنیدن درخواست دانلود از WebView
+        // ۱. شنیدن درخواست دانلود از WebView
         const unlistenTrigger = listen<{ url: string; fileName: string }>(
             "trigger-custom-download",
             (event) => {
@@ -28,12 +28,13 @@ export function useDownloadManager() {
             },
         );
 
-        // 2. بروزرسانی زنده درصد و حجم دانلود
+        // ۲. بروزرسانی زنده درصد، حجم و وضعیت دانلود
         const unlistenProgress = listen<{
             id: string;
             fileName: string;
             downloadedBytes: number;
             totalBytes: number;
+            state?: "downloading" | "paused";
         }>("download-progress", (event) => {
             const data = event.payload;
             setHasUnread(true);
@@ -42,11 +43,22 @@ export function useDownloadManager() {
                 const index = prev.findIndex((item) => item.id === data.id);
                 if (index !== -1) {
                     const updated = [...prev];
+
+                    // اگر وضعیت پوز است، مقادیر بایت‌ها را صفر نکن و از مقدار قبلی نگه‌دار
+                    const isPaused =
+                        updated[index].state === "paused" &&
+                        data.downloadedBytes === 0;
+
                     updated[index] = {
                         ...updated[index],
-                        downloadedBytes: data.downloadedBytes,
-                        totalBytes: data.totalBytes,
-                        state: "downloading",
+                        downloadedBytes: isPaused
+                            ? updated[index].downloadedBytes
+                            : data.downloadedBytes,
+                        totalBytes: isPaused
+                            ? updated[index].totalBytes
+                            : data.totalBytes || updated[index].totalBytes,
+                        state:
+                            data.state || updated[index].state || "downloading",
                     };
                     return updated;
                 } else {
@@ -56,7 +68,7 @@ export function useDownloadManager() {
                             fileName: data.fileName,
                             totalBytes: data.totalBytes,
                             downloadedBytes: data.downloadedBytes,
-                            state: "downloading",
+                            state: data.state || "downloading",
                             startTime: Date.now(),
                         },
                         ...prev,
@@ -65,7 +77,25 @@ export function useDownloadManager() {
             });
         });
 
-        // 3. تکمیل یا شکست دانلود
+        // ۳. تغییر وضعیت‌های خاص
+        const unlistenStateChanged = listen<{
+            id: string;
+            state:
+                | "downloading"
+                | "paused"
+                | "completed"
+                | "failed"
+                | "cancelled";
+        }>("download-state-changed", (event) => {
+            const data = event.payload;
+            setDownloads((prev) =>
+                prev.map((item) =>
+                    item.id === data.id ? { ...item, state: data.state } : item,
+                ),
+            );
+        });
+
+        // ۴. تکمیل یا شکست دانلود
         const unlistenFinished = listen<{
             id: string;
             fileName: string;
@@ -89,6 +119,7 @@ export function useDownloadManager() {
         return () => {
             unlistenTrigger.then((u) => u());
             unlistenProgress.then((u) => u());
+            unlistenStateChanged.then((u) => u());
             unlistenFinished.then((u) => u());
         };
     }, []);
@@ -101,7 +132,37 @@ export function useDownloadManager() {
         }
     };
 
+    const pauseDownload = (id: string) => {
+        setDownloads((prev) =>
+            prev.map((item) =>
+                item.id === id ? { ...item, state: "paused" } : item,
+            ),
+        );
+        invoke("pause_download", { id }).catch(console.error);
+    };
+
+    const resumeDownload = (id: string) => {
+        const targetItem = downloads.find((item) => item.id === id);
+        if (!targetItem) return;
+
+        setDownloads((prev) =>
+            prev.map((item) =>
+                item.id === id ? { ...item, state: "downloading" } : item,
+            ),
+        );
+
+        invoke("resume_download", {
+            id,
+            fileName: targetItem.fileName,
+        }).catch(console.error);
+    };
+
     const cancelDownload = (id: string) => {
+        setDownloads((prev) =>
+            prev.map((item) =>
+                item.id === id ? { ...item, state: "cancelled" } : item,
+            ),
+        );
         invoke("cancel_download", { id }).catch(console.error);
     };
 
@@ -110,6 +171,8 @@ export function useDownloadManager() {
         hasUnread,
         markAsRead,
         openInFolder,
+        pauseDownload,
+        resumeDownload,
         cancelDownload,
     };
 }

@@ -1,7 +1,10 @@
 use crate::models::payloads::{DownloadFinishedPayload, DownloadProgressPayload};
 use crate::state::DownloadState;
 use futures_util::StreamExt;
+use reqwest::header::RANGE;
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
+use tokio::io::AsyncWriteExt;
 
 pub async fn execute_download(
     app: AppHandle,
@@ -16,14 +19,31 @@ pub async fn execute_download(
     let app_handle = app.clone();
     let tasks = state.tasks.clone();
 
+    // اگر تسکی از قبل بود abort میکنیم
     let mut tasks_guard = tasks.lock().await;
     if let Some(existing_task) = tasks_guard.remove(&id) {
         existing_task.abort();
     }
 
     let task = tokio::spawn(async move {
+        // محاسبه میزان بایتی که قبلا دانلود شده (برای Resume)
+        let downloaded_bytes = if save_path.exists() {
+            tokio::fs::metadata(&save_path)
+                .await
+                .map(|m| m.len())
+                .unwrap_or(0)
+        } else {
+            0
+        };
+
         let client = reqwest::Client::new();
-        let res = match client.get(&url).send().await {
+        let mut req = client.get(&url);
+
+        if downloaded_bytes > 0 {
+            req = req.header(RANGE, format!("bytes={}-", downloaded_bytes));
+        }
+
+        let res = match req.send().await {
             Ok(r) => r,
             Err(_) => {
                 let _ = app_handle.emit(
@@ -39,8 +59,20 @@ pub async fn execute_download(
             }
         };
 
-        let total_bytes = res.content_length().unwrap_or(0);
-        let mut file = match tokio::fs::File::create(&save_path).await {
+        // محاسبه سایز کل (اگر کد پاسخ 206 Partial Content باشد، Content-Length فقط اندازه باقی‌مانده است)
+        let total_bytes = if res.status() == reqwest::StatusCode::PARTIAL_CONTENT {
+            downloaded_bytes + res.content_length().unwrap_or(0)
+        } else {
+            res.content_length().unwrap_or(0)
+        };
+
+        // باز کردن فایل در حالت Append (ادامه) یا Create (شروع از 0)
+        let mut file = match tokio::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&save_path)
+            .await
+        {
             Ok(f) => f,
             Err(_) => {
                 let _ = app_handle.emit(
@@ -57,7 +89,7 @@ pub async fn execute_download(
         };
 
         let mut stream = res.bytes_stream();
-        let mut downloaded_bytes: u64 = 0;
+        let mut current_downloaded = downloaded_bytes;
         let mut last_emit = std::time::Instant::now();
 
         let _ = app_handle.emit(
@@ -65,7 +97,7 @@ pub async fn execute_download(
             DownloadProgressPayload {
                 id: url.clone(),
                 file_name: file_name.clone(),
-                downloaded_bytes: 0,
+                downloaded_bytes: current_downloaded,
                 total_bytes,
                 state: "downloading".into(),
             },
@@ -74,7 +106,6 @@ pub async fn execute_download(
         while let Some(item) = stream.next().await {
             match item {
                 Ok(chunk) => {
-                    use tokio::io::AsyncWriteExt;
                     if file.write_all(&chunk).await.is_err() {
                         let _ = app_handle.emit(
                             "download-finished",
@@ -87,15 +118,15 @@ pub async fn execute_download(
                         );
                         return;
                     }
-                    downloaded_bytes += chunk.len() as u64;
+                    current_downloaded += chunk.len() as u64;
 
-                    if last_emit.elapsed().as_millis() > 100 || downloaded_bytes == total_bytes {
+                    if last_emit.elapsed().as_millis() > 100 || current_downloaded == total_bytes {
                         let _ = app_handle.emit(
                             "download-progress",
                             DownloadProgressPayload {
                                 id: url.clone(),
                                 file_name: file_name.clone(),
-                                downloaded_bytes,
+                                downloaded_bytes: current_downloaded,
                                 total_bytes,
                                 state: "downloading".into(),
                             },
@@ -141,6 +172,56 @@ pub async fn start_custom_download(
     file_name: String,
 ) -> Result<(), String> {
     execute_download(app, state.inner().clone(), url, file_name).await
+}
+
+#[tauri::command]
+pub async fn pause_download(
+    app: AppHandle,
+    state: tauri::State<'_, DownloadState>,
+    id: String,
+    file_name: Option<String>,
+) -> Result<(), String> {
+    let mut tasks = state.tasks.lock().await;
+    if let Some(task) = tasks.remove(&id) {
+        task.abort();
+    }
+
+    // محاسبه حجم دانلود شده تا این لحظه از روی فایل
+    let downloaded_bytes = if let Some(ref fname) = file_name {
+        if let Some(downloads_dir) = dirs::download_dir() {
+            let save_path = downloads_dir.join(fname);
+            tokio::fs::metadata(&save_path)
+                .await
+                .map(|m| m.len())
+                .unwrap_or(0)
+        } else {
+            0
+        }
+    } else {
+        0
+    };
+
+    // به جای ارسال download-progress با مقادیر 0، ایونت state-changed ارسال کنید
+    let _ = app.emit(
+        "download-state-changed",
+        serde_json::json!({
+            "id": id,
+            "state": "paused",
+            "downloadedBytes": downloaded_bytes
+        }),
+    );
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn resume_download(
+    app: AppHandle,
+    state: tauri::State<'_, DownloadState>,
+    id: String,
+    file_name: String,
+) -> Result<(), String> {
+    execute_download(app, state.inner().clone(), id, file_name).await
 }
 
 #[tauri::command]

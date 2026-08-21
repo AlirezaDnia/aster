@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
@@ -47,6 +47,58 @@ export function App() {
     const [extensionsMap, setExtensionsMap] = useState<
         Record<string, ExtensionStates>
     >({});
+
+    // تابع مدیریت باز کردن صفحه دانلودها (جلوگیری از ساخت تب تکراری)
+    const handleOpenDownloads = useCallback(() => {
+        markAsRead();
+        const existingDownloadTab = tabs.find(
+            (tab) => tab.url === "aster://downloads",
+        );
+
+        if (existingDownloadTab) {
+            handleSelectTab(existingDownloadTab.id);
+        } else {
+            handleNewTab("aster://downloads");
+        }
+    }, [tabs, markAsRead, handleSelectTab, handleNewTab]);
+
+    // 🔥 ذخیره آخرین رفرنس توابع جهت جلوگیری از Re-register شدن Event Listener
+    const handleNewTabRef = useRef(handleNewTab);
+    const handleOpenDownloadsRef = useRef(handleOpenDownloads);
+
+    useEffect(() => {
+        handleNewTabRef.current = handleNewTab;
+        handleOpenDownloadsRef.current = handleOpenDownloads;
+    }, [handleNewTab, handleOpenDownloads]);
+
+    // 🔥 پیاده‌سازی نیتیو و استاندارد Tauri Listener (فقط ۱ بار در لایف‌سایکل رندر می‌شود)
+    useEffect(() => {
+        let unlisten: (() => void) | null = null;
+        let isMounted = true;
+
+        listen<string>("open-new-tab", (event) => {
+            if (!event.payload) return;
+
+            if (event.payload === "aster://downloads") {
+                handleOpenDownloadsRef.current();
+            } else {
+                handleNewTabRef.current(event.payload);
+            }
+        }).then((unlistenFn) => {
+            if (isMounted) {
+                unlisten = unlistenFn;
+            } else {
+                unlistenFn(); // اگر کامپوننت قبل از حل شدن پرامیس unmount شد
+            }
+        });
+
+        return () => {
+            isMounted = false;
+            if (unlisten) {
+                unlisten();
+            }
+        };
+    }, []); // dependency خالی تضمین می‌کند listener فقط ۱ بار ثبت شود
 
     const applyExtensionScript = useCallback(
         (tabId: string, states: ExtensionStates) => {
@@ -98,18 +150,6 @@ export function App() {
         isMenuOpen,
         isExtensionsOpen,
     );
-
-    useEffect(() => {
-        const unlistenPromise = listen<string>("open-new-tab", (event) => {
-            if (event.payload) {
-                handleNewTab(event.payload);
-            }
-        });
-
-        return () => {
-            unlistenPromise.then((unlisten) => unlisten());
-        };
-    }, [handleNewTab]);
 
     const activeUrl = activeTab?.url || "";
 
@@ -165,10 +205,7 @@ export function App() {
                     isMenuOpen={isMenuOpen}
                     hasUnreadDownloads={hasUnread}
                     isDownloading={isDownloading}
-                    onOpenDownloads={() => {
-                        markAsRead();
-                        handleNewTab("aster://downloads");
-                    }}
+                    onOpenDownloads={handleOpenDownloads}
                 />
             </header>
 
@@ -185,9 +222,13 @@ export function App() {
                 {isMenuOpen && (
                     <MenuSidebar
                         onClose={() => setIsMenuOpen(false)}
-                        onNewTab={(url) =>
-                            handleNewTab(url || "aster://newtab")
-                        }
+                        onNewTab={(url) => {
+                            if (url === "aster://downloads") {
+                                handleOpenDownloads();
+                            } else {
+                                handleNewTab(url || "aster://newtab");
+                            }
+                        }}
                         activeTabId={activeTabId}
                         activeTabUrl={activeTab?.url}
                     />

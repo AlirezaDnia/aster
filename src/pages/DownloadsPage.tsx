@@ -5,7 +5,8 @@ import {
     AlertCircle,
     FileText,
     XCircle,
-    RotateCcw,
+    Pause,
+    Play,
 } from "lucide-react";
 import { DownloadItem, useDownloadManager } from "../hooks/useDownloadManager";
 
@@ -31,6 +32,8 @@ export function DownloadsPage({
         downloads: hookDownloads = [],
         openInFolder: hookOpenInFolder,
         cancelDownload,
+        pauseDownload,
+        resumeDownload,
     } = useDownloadManager();
 
     const downloadsList = propsDownloads ?? hookDownloads;
@@ -164,8 +167,34 @@ export function DownloadsPage({
 
                                 {/* Actions */}
                                 <div className="flex items-center gap-2 shrink-0">
-                                    {/* Cancel during download */}
+                                    {/* Pause & Resume Controls */}
                                     {item.state === "downloading" && (
+                                        <button
+                                            onClick={() =>
+                                                pauseDownload(item.id)
+                                            }
+                                            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 transition-colors"
+                                            title="Pause Download"
+                                        >
+                                            <Pause className="h-4 w-4" />
+                                        </button>
+                                    )}
+
+                                    {item.state === "paused" && (
+                                        <button
+                                            onClick={() =>
+                                                resumeDownload(item.id)
+                                            }
+                                            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-400 transition-colors"
+                                            title="Resume Download"
+                                        >
+                                            <Play className="h-4 w-4" />
+                                        </button>
+                                    )}
+
+                                    {/* Cancel Control */}
+                                    {(item.state === "downloading" ||
+                                        item.state === "paused") && (
                                         <button
                                             onClick={() =>
                                                 cancelDownload(item.id)
