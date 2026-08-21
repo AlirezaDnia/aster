@@ -234,6 +234,14 @@ pub async fn webview_reload(app: AppHandle, label: String) -> Result<(), String>
 }
 
 #[tauri::command]
+pub async fn webview_stop(app: AppHandle, label: String) -> Result<(), String> {
+    if let Some(webview) = app.get_webview(&label) {
+        let _ = webview.eval("window.stop()");
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn set_webview_zoom(app: AppHandle, label: String, factor: f64) -> Result<(), String> {
     if let Some(webview) = app.get_webview(&label) {
         let js = format!("document.body.style.zoom = '{}';", factor);

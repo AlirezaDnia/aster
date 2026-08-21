@@ -2,7 +2,6 @@ use crate::models::payloads::{DownloadFinishedPayload, DownloadProgressPayload};
 use crate::state::DownloadState;
 use futures_util::StreamExt;
 use reqwest::header::RANGE;
-use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::io::AsyncWriteExt;
 

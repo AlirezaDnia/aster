@@ -62,7 +62,7 @@ export function App() {
         }
     }, [tabs, markAsRead, handleSelectTab, handleNewTab]);
 
-    // 🔥 ذخیره آخرین رفرنس توابع جهت جلوگیری از Re-register شدن Event Listener
+    // ذخیره آخرین رفرنس توابع جهت جلوگیری از Re-register شدن Event Listener
     const handleNewTabRef = useRef(handleNewTab);
     const handleOpenDownloadsRef = useRef(handleOpenDownloads);
 
@@ -71,7 +71,7 @@ export function App() {
         handleOpenDownloadsRef.current = handleOpenDownloads;
     }, [handleNewTab, handleOpenDownloads]);
 
-    // 🔥 پیاده‌سازی نیتیو و استاندارد Tauri Listener (فقط ۱ بار در لایف‌سایکل رندر می‌شود)
+    // پیاده‌سازی نیتیو Tauri Listener
     useEffect(() => {
         let unlisten: (() => void) | null = null;
         let isMounted = true;
@@ -88,7 +88,7 @@ export function App() {
             if (isMounted) {
                 unlisten = unlistenFn;
             } else {
-                unlistenFn(); // اگر کامپوننت قبل از حل شدن پرامیس unmount شد
+                unlistenFn();
             }
         });
 
@@ -98,7 +98,7 @@ export function App() {
                 unlisten();
             }
         };
-    }, []); // dependency خالی تضمین می‌کند listener فقط ۱ بار ثبت شود
+    }, []);
 
     const applyExtensionScript = useCallback(
         (tabId: string, states: ExtensionStates) => {
@@ -152,6 +152,8 @@ export function App() {
     );
 
     const activeUrl = activeTab?.url || "";
+    // دریافت وضعیت لودینگ تب جاری
+    const isLoading = activeTab?.isLoading || false;
 
     return (
         <div className="flex h-screen w-screen flex-col bg-slate-950 text-slate-100 overflow-hidden select-none">
@@ -168,6 +170,7 @@ export function App() {
                 <NavigationBar
                     currentUrl={activeUrl}
                     activeTabId={activeTabId}
+                    isLoading={isLoading}
                     onNewTab={(url) => handleNewTab(url || "aster://newtab")}
                     onNavigate={handleNavigate}
                     onGoBack={() =>
@@ -182,6 +185,11 @@ export function App() {
                     }
                     onReload={() =>
                         invoke("webview_reload", {
+                            label: `tab_${activeTabId}`,
+                        })
+                    }
+                    onStopLoading={() =>
+                        invoke("webview_stop", {
                             label: `tab_${activeTabId}`,
                         })
                     }

@@ -3,6 +3,7 @@ import {
     ArrowLeft,
     ArrowRight,
     RotateCw,
+    X, // <--- اضافه شد
     Sparkles,
     SlidersHorizontal,
     MoreVertical,
@@ -13,11 +14,13 @@ import {
 interface NavigationBarProps {
     currentUrl: string;
     activeTabId: string | null;
-    onNewTab: (url?: string) => void; // <--- ورودی URL اضافه شد
+    isLoading?: boolean; // <--- وضعیت لودینگ صفحه
+    onNewTab: (url?: string) => void;
     onNavigate: (url: string) => void;
     onGoBack: () => void;
     onGoForward: () => void;
     onReload: () => void;
+    onStopLoading?: () => void; // <--- اکشن توقف لودینگ
     onToggleSidebar: () => void;
     isSidebarOpen: boolean;
     onToggleExtensionsSidebar: () => void;
@@ -25,18 +28,20 @@ interface NavigationBarProps {
     onToggleMenu: () => void;
     isMenuOpen: boolean;
     hasUnreadDownloads?: boolean;
-    isDownloading?: boolean; // <--- حالت لودینگ دانلود
+    isDownloading?: boolean;
     onOpenDownloads?: () => void;
 }
 
 export function NavigationBar({
     currentUrl,
     activeTabId,
+    isLoading,
     onNewTab,
     onNavigate,
     onGoBack,
     onGoForward,
     onReload,
+    onStopLoading,
     onToggleSidebar,
     isSidebarOpen,
     onToggleExtensionsSidebar,
@@ -96,7 +101,6 @@ export function NavigationBar({
         setTimeout(() => inputRef.current?.select(), 10);
     };
 
-    // کلیک روی دکمه دانلود: باز کردن تب جدید با آدرس دانلودها
     const handleDownloadClick = () => {
         if (onOpenDownloads) {
             onOpenDownloads();
@@ -122,13 +126,27 @@ export function NavigationBar({
                 >
                     <ArrowRight className="h-4 w-4" />
                 </button>
-                <button
-                    type="button"
-                    onClick={onReload}
-                    className="rounded-full p-1.5 hover:bg-slate-800/80 hover:text-slate-100 transition-colors"
-                >
-                    <RotateCw className="h-4 w-4" />
-                </button>
+
+                {/* Reload / Stop Button Dynamic Switch */}
+                {isLoading ? (
+                    <button
+                        type="button"
+                        onClick={onStopLoading || onReload}
+                        className="rounded-full p-1.5 hover:bg-slate-800/80 hover:text-slate-100 transition-colors text-slate-300"
+                        title="Stop loading"
+                    >
+                        <X className="h-4 w-4" />
+                    </button>
+                ) : (
+                    <button
+                        type="button"
+                        onClick={onReload}
+                        className="rounded-full p-1.5 hover:bg-slate-800/80 hover:text-slate-100 transition-colors"
+                        title="Reload page"
+                    >
+                        <RotateCw className="h-4 w-4" />
+                    </button>
+                )}
             </div>
 
             <form onSubmit={handleSubmit} className="flex flex-1 items-center">
@@ -163,7 +181,7 @@ export function NavigationBar({
             </form>
 
             <div className="flex items-center gap-1.5">
-                {/* دکمه دانلود با لودینگ چرخان دور آن */}
+                {/* Download Button */}
                 <div className="relative flex items-center justify-center">
                     {isDownloading && (
                         <span className="absolute inset-0 rounded-full border-2 border-indigo-500/20 border-t-indigo-500 animate-spin pointer-events-none" />

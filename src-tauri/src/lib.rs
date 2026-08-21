@@ -30,6 +30,7 @@ pub fn run() {
             cancel_download,
             pause_download,
             resume_download,
+            webview_stop,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
