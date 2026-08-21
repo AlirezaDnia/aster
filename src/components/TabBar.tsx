@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { Tab } from "../types";
-import { ProgressBar } from "./ProgressBar";
 
 interface TabBarProps {
     tabs: Tab[];
@@ -29,7 +28,6 @@ export function TabBar({
     ) => {
         setDraggedIndex(index);
         e.dataTransfer.effectAllowed = "move";
-        // تنظیم تصویر شفاف یا داتا جهت بهبود بصری هنگام درگ
         if (e.dataTransfer.setDragImage && e.currentTarget) {
             e.dataTransfer.setDragImage(e.currentTarget, 20, 20);
         }
@@ -146,9 +144,6 @@ export function TabBar({
                                 ✕
                             </button>
                         )}
-
-                        {/* Progress Bar Component */}
-                        <ProgressBar isLoading={Boolean(tab.isLoading)} />
                     </div>
                 );
             })}
