@@ -1,26 +1,32 @@
 import React, { useState } from "react";
 import {
     Search,
-    Sparkles,
     ShieldCheck,
     Cpu,
     ArrowUpRight,
     Compass,
     Asterisk,
+    Bookmark,
+    Clock,
 } from "lucide-react";
 
 interface StartPageProps {
-    onSearch: (query: string) => void;
+    onNavigate: (url: string) => void;
 }
 
-export function StartPage({ onSearch }: StartPageProps) {
+export function StartPage({ onNavigate }: StartPageProps) {
     const [query, setQuery] = useState("");
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (query.trim()) {
-            onSearch(query.trim());
-        }
+        if (!query.trim()) return;
+
+        const targetUrl =
+            query.startsWith("http://") || query.startsWith("https://")
+                ? query.trim()
+                : `https://www.google.com/search?q=${encodeURIComponent(query.trim())}`;
+
+        onNavigate(targetUrl);
     };
 
     const quickLinks = [
@@ -46,7 +52,7 @@ export function StartPage({ onSearch }: StartPageProps) {
 
     return (
         <div className="relative flex h-full w-full flex-col items-center justify-center bg-slate-950 px-4 text-slate-100 select-none overflow-hidden">
-            {/* پس‌زمینه نوری جادویی (Background Glow Effects) */}
+            {/* Background Glow Effects */}
             <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-96 w-[600px] rounded-full bg-indigo-600/15 blur-[120px] pointer-events-none" />
             <div className="absolute -bottom-40 left-1/2 -translate-x-1/2 h-96 w-[500px] rounded-full bg-violet-600/10 blur-[100px] pointer-events-none" />
 
@@ -54,10 +60,10 @@ export function StartPage({ onSearch }: StartPageProps) {
                 {/* Brand Header */}
                 <div className="flex flex-col items-center gap-3">
                     <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 text-white shadow-2xl shadow-indigo-500/30 ring-1 ring-white/20">
-                        <Asterisk className="h-12 w-12" />
+                        <Asterisk className="h-10 w-10 animate-spin-slow" />
                     </div>
                     <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-b from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
-                        Aster
+                        Aster Browser
                     </h1>
                     <p className="text-xs font-medium text-slate-400/80 tracking-wide">
                         NEXT-GEN AI POWERED BROWSER
@@ -72,7 +78,7 @@ export function StartPage({ onSearch }: StartPageProps) {
                             type="text"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                            placeholder="Search with Google or type URL..."
+                            placeholder="Search with Google or enter web address..."
                             className="w-full bg-transparent px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none font-normal"
                         />
                         <button
@@ -90,7 +96,7 @@ export function StartPage({ onSearch }: StartPageProps) {
                     {quickLinks.map((link) => (
                         <button
                             key={link.title}
-                            onClick={() => onSearch(link.url)}
+                            onClick={() => onNavigate(link.url)}
                             className="group flex flex-col items-center gap-2 rounded-2xl bg-slate-900/40 border border-slate-800/50 p-3 hover:bg-slate-800/60 hover:border-slate-700/80 hover:shadow-lg transition-all"
                         >
                             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800/80 group-hover:bg-slate-700/80 transition-colors border border-slate-700/50">
@@ -99,7 +105,6 @@ export function StartPage({ onSearch }: StartPageProps) {
                                     alt={link.title}
                                     className="h-5 w-5 rounded object-contain"
                                     onError={(e) => {
-                                        // آیکون رزرو در صورت خطا در لود favicon
                                         e.currentTarget.style.display = "none";
                                     }}
                                 />
@@ -111,8 +116,26 @@ export function StartPage({ onSearch }: StartPageProps) {
                     ))}
                 </div>
 
+                {/* Internal Quick Links (Bookmarks & History) */}
+                <div className="flex items-center justify-center gap-4 text-xs text-slate-400 border-t border-slate-900/80 pt-4 w-full">
+                    <button
+                        onClick={() => onNavigate("aster://bookmarks")}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900/40 hover:bg-slate-800 border border-slate-800/60 hover:text-slate-200 transition-all"
+                    >
+                        <Bookmark className="h-3.5 w-3.5 text-indigo-400" />{" "}
+                        Bookmarks
+                    </button>
+                    <button
+                        onClick={() => onNavigate("aster://history")}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900/40 hover:bg-slate-800 border border-slate-800/60 hover:text-slate-200 transition-all"
+                    >
+                        <Clock className="h-3.5 w-3.5 text-violet-400" />{" "}
+                        History
+                    </button>
+                </div>
+
                 {/* Footer Badges */}
-                <div className="flex items-center justify-center gap-6 text-[11px] font-medium text-slate-500 border-t border-slate-900/80 pt-6 w-full">
+                <div className="flex items-center justify-center gap-6 text-[11px] font-medium text-slate-500 pt-2 w-full">
                     <span className="flex items-center gap-1.5 hover:text-slate-400 transition-colors">
                         <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />{" "}
                         Isolated Sandbox

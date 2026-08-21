@@ -13,7 +13,7 @@ import {
 interface NavigationBarProps {
     currentUrl: string;
     activeTabId: string | null;
-    onNewTab: () => void;
+    onNewTab: (url?: string) => void; // <--- ورودی URL اضافه شد
     onNavigate: (url: string) => void;
     onGoBack: () => void;
     onGoForward: () => void;
@@ -25,6 +25,7 @@ interface NavigationBarProps {
     onToggleMenu: () => void;
     isMenuOpen: boolean;
     hasUnreadDownloads?: boolean;
+    isDownloading?: boolean; // <--- حالت لودینگ دانلود
     onOpenDownloads?: () => void;
 }
 
@@ -43,6 +44,7 @@ export function NavigationBar({
     onToggleMenu,
     isMenuOpen,
     hasUnreadDownloads,
+    isDownloading,
     onOpenDownloads,
 }: NavigationBarProps) {
     const [inputUrl, setInputUrl] = useState(currentUrl);
@@ -92,6 +94,14 @@ export function NavigationBar({
         setIsFocused(true);
         setInputUrl(currentUrl);
         setTimeout(() => inputRef.current?.select(), 10);
+    };
+
+    // کلیک روی دکمه دانلود: باز کردن تب جدید با آدرس دانلودها
+    const handleDownloadClick = () => {
+        if (onOpenDownloads) {
+            onOpenDownloads();
+        }
+        onNewTab("aster://downloads");
     };
 
     return (
@@ -152,17 +162,29 @@ export function NavigationBar({
             </form>
 
             <div className="flex items-center gap-1.5">
-                <button
-                    type="button"
-                    onClick={onOpenDownloads}
-                    className="relative rounded-full p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-100 transition-colors"
-                    title="Downloads"
-                >
-                    <Download className="h-4 w-4" />
-                    {hasUnreadDownloads && (
-                        <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-indigo-500 animate-pulse" />
+                {/* دکمه دانلود با لودینگ چرخان دور آن */}
+                <div className="relative flex items-center justify-center">
+                    {isDownloading && (
+                        <span className="absolute inset-0 rounded-full border-2 border-indigo-500/20 border-t-indigo-500 animate-spin pointer-events-none" />
                     )}
-                </button>
+
+                    <button
+                        type="button"
+                        onClick={handleDownloadClick}
+                        className={`relative rounded-full p-1.5 transition-colors ${
+                            isDownloading
+                                ? "text-indigo-400 bg-indigo-500/10"
+                                : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                        }`}
+                        title="Downloads"
+                    >
+                        <Download className="h-4 w-4 relative z-10" />
+
+                        {!isDownloading && hasUnreadDownloads && (
+                            <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-indigo-500 animate-pulse" />
+                        )}
+                    </button>
+                </div>
 
                 <button
                     type="button"

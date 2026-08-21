@@ -19,7 +19,9 @@ export function InternalPageViewer({
     downloads = [],
     onOpenFolder,
 }: InternalPageViewerProps) {
-    const pageRoute = url.replace("aster://", "").split("/")[0].toLowerCase();
+    // جداسازی امن مسیر با پشتیبانی از Query Params و Hash
+    const cleanPath = url.replace(/^aster:\/\//i, "");
+    const pageRoute = cleanPath.split(/[?/#]/)[0].toLowerCase();
 
     const renderContent = (): ReactNode => {
         switch (pageRoute) {
@@ -42,13 +44,15 @@ export function InternalPageViewer({
             default:
                 return (
                     <div className="flex flex-col items-center justify-center h-full text-slate-400">
-                        <h1 className="text-2xl font-bold mb-2">
+                        <h1 className="text-2xl font-bold mb-2 text-slate-200">
                             404 - Page Not Found
                         </h1>
                         <p className="text-sm">
                             The internal page{" "}
-                            <code className="text-indigo-400">{url}</code> does
-                            not exist.
+                            <code className="text-indigo-400 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                                {url}
+                            </code>{" "}
+                            does not exist.
                         </p>
                     </div>
                 );
