@@ -1,8 +1,10 @@
 [package]
-name = "aster"
+name = "aster-browser"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "Aster Browser - Fast, Safe, AI-Powered Custom Web Browser"
+authors = ["Alireza Davoodinia"]
+repository = "https://github.com/AlirezaDnia/aster"
+homepage = "https://github.com/AlirezaDnia/aster"
 edition = "2021"
 
 [lib]
