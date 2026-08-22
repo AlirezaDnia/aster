@@ -9,7 +9,7 @@ export interface Tab {
 export type AIProvider = "openrouter" | "openai" | "gemini";
 
 export interface AISettings {
-    provider: string;
+    provider: AIProvider;
     apiKey: string;
     model: string;
 }

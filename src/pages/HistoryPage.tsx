@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { History, Trash2, Search } from "lucide-react";
+import { History, Search } from "lucide-react";
 
 interface HistoryItem {
     url: string;

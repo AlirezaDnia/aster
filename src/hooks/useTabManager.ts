@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Tab } from "../types";
 
-interface TabStatePayload {
+export interface TabStatePayload {
     label: string;
     url: string;
     title: string;

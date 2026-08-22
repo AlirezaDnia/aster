@@ -34,7 +34,6 @@ interface NavigationBarProps {
 
 export function NavigationBar({
     currentUrl,
-    activeTabId,
     isLoading,
     onNewTab,
     onNavigate,

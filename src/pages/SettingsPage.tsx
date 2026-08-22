@@ -1,4 +1,4 @@
-import { Settings, Shield, Sliders, Moon } from "lucide-react";
+import { Settings, Shield, Moon } from "lucide-react";
 
 export function SettingsPage() {
     return (
